@@ -102,7 +102,7 @@ class GmailSource(EmailSource):
         self.client = google_client(google.token_url, cfg.url, cfg.timeout_s)
 
     async def poll(self, cursor: str | None) -> tuple[list[Upstream], str | None]:
-        headers = {"Authorization": f"Bearer {await self._access_token()}"}
+        headers = {"Authorization": f"Bearer {await self.access_token()}"}
         if cursor is None:
             ids, next_cursor = await self._backfill(headers)
         else:
@@ -131,7 +131,7 @@ class GmailSource(EmailSource):
             payload={"labels": message.label_ids, "thread": message.thread_id},
         )
 
-    async def _access_token(self) -> str:
+    async def access_token(self) -> str:
         secrets = self.secrets
         response = await self.client.post(
             self.google.token_url,
