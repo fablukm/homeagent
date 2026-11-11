@@ -1,0 +1,5 @@
+[retention]
+raw_payload_days = 90
+llm_calls_days = 30
+data_budget_gb = 2.0
+nightly_cron = "30 3 * * *"

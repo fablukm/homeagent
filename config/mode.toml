@@ -1,0 +1,13 @@
+[mode.hours]
+mon = ["08:30-12:00", "13:00-17:30"]
+tue = ["08:30-12:00", "13:00-17:30"]
+wed = ["08:30-12:00", "13:00-17:30"]
+thu = ["08:30-12:00", "13:00-17:30"]
+fri = ["08:30-12:00", "13:00-16:00"]
+
+[mode.overrides]
+manual_ttl_h = 3
+holiday_token = "holiday"
+work_event_lookahead_min = 15
+family_event_in_work = true
+off_window = "22:30-06:30"

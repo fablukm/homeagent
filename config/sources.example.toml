@@ -1,0 +1,44 @@
+[sources]
+partner_emails = ["partner@example.com"]
+
+[[sources.email]]
+name = "gmail"
+account = "you@gmail.com"
+interval_min = 5
+backfill_days = 2
+timeout_s = 30
+url = "https://gmail.googleapis.com/gmail/v1/users/me/"
+labels = ["Work", "Dog", "Insurance", "Kita", "Quittungen und Rechnungen", "Reservationen", "SBB", "Science Projects"]
+
+[[sources.email]]
+name = "yandex"
+account = "you@yandex.ru"
+interval_min = 5
+backfill_days = 2
+timeout_s = 30
+labels = []
+
+[[sources.calendar]]
+name = "private"
+calendar_id = "you@gmail.com"
+interval_min = 10
+
+[[sources.calendar]]
+name = "work"
+calendar_id = "you@work.example"
+interval_min = 10
+
+[sources.google]
+auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+token_url = "https://oauth2.googleapis.com/token"
+calendar_url = "https://www.googleapis.com/calendar/v3/"
+tasks_url = "https://tasks.googleapis.com/tasks/v1/"
+timeout_s = 30
+scopes = [
+  "https://www.googleapis.com/auth/gmail.labels",
+  "https://www.googleapis.com/auth/gmail.labels.create",
+  "https://www.googleapis.com/auth/gmail.messages.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
+  "https://www.googleapis.com/auth/tasks",
+]

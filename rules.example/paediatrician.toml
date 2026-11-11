@@ -1,0 +1,26 @@
+id = "paediatrician"
+description = "Partner's ! blocker with #kids: stay home, no meetings, book childcare early"
+
+[trigger]
+source = "calendar"
+calendars = ["private"]
+
+[match]
+creator = "partner@example.com"
+tokens_any = ["blocker", "kids"]
+
+[[actions]]
+type = "calendar.block"
+calendar = "work"
+all_day = true
+title = "Home (family)"
+
+[[actions]]
+type = "task.create"
+list = "home"
+title = "Book childcare for {event.occurred_at:%d.%m.}"
+due_offset_days = -10
+
+[[actions]]
+type = "telegram.log"
+text = "{rule.id}: blocked {event.occurred_at:%d.%m.}, childcare task set"

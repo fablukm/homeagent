@@ -1,0 +1,38 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/
+*.db
+
+# secrets
+.env
+.env.*
+!.env.example
+*.env
+!deploy/*.env.example
+*.bundle
+
+# personal config: copy the .example files
+config/sources.toml
+config/telegram.toml
+rules/
+
+# agent development: local only, never on GitHub
+CLAUDE.md
+CLAUDE.local.md
+CLAUDE.local.md.example
+AGENTS.md
+.claude/
+.agents/
+.codex/
+.beads/
+.dolt/
+.beads-credential-key
+.worktreeinclude
+docs/
+.github/
+scripts/*
+!scripts/deploy.sh
+!scripts/google_auth.py

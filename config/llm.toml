@@ -1,0 +1,83 @@
+[llm]
+health_interval_min = 5
+
+[llm.backends.pi]
+type = "ollama"
+url = "http://ollama:11434"
+model = "lfm3:1.7b"
+timeout_s = 120
+
+[llm.backends.pi-qwen]
+type = "ollama"
+url = "http://ollama:11434"
+model = "qwen3.5:2b"
+timeout_s = 120
+
+[llm.backends.zotac]
+type = "openai"
+url = "http://box:8080/v1"
+model = "gemma4-e4b"
+timeout_s = 60
+
+[llm.backends.openai]
+type = "openai"
+url = "https://api.openai.com/v1"
+model = "gpt-5-mini"
+timeout_s = 60
+cloud = true
+secret = "openai"
+sends_temperature = false
+
+[llm.backends.deepseek]
+type = "openai"
+url = "https://api.deepseek.com"
+model = "deepseek-v4-flash"
+timeout_s = 60
+cloud = true
+secret = "deepseek"
+json_mode = "object"
+
+[llm.backends.moonshot]
+type = "openai"
+url = "https://api.moonshot.ai/v1"
+model = "kimi-k2.6"
+timeout_s = 60
+cloud = true
+secret = "moonshot"
+json_mode = "object"
+
+[llm.backends.alibaba]
+type = "openai"
+url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+model = "qwen-plus"
+timeout_s = 60
+cloud = true
+secret = "alibaba"
+json_mode = "object"
+
+[llm.backends.anthropic]
+type = "anthropic"
+model = "claude-haiku-5-5"
+timeout_s = 60
+cloud = true
+secret = "anthropic"
+
+[llm.backends.laya]
+type = "laya"
+url = "http://laya-serve:8080"
+model = "laya-multilingual"
+timeout_s = 30
+
+[llm.classes.classify]
+backends = ["pi", "pi-qwen"]
+
+[llm.classes.extract]
+backends = ["pi", "pi-qwen"]
+
+[llm.classes.rule_gen]
+backends = ["zotac", "pi"]
+
+[llm.classes.answer]
+backends = ["zotac", "pi"]
+allow_cloud = true
+temperature = 0.2

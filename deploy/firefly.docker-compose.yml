@@ -1,0 +1,26 @@
+# /mnt/nvme/docker/firefly/firefly.docker-compose.yml
+services:
+  firefly-iii:
+    image: fireflyiii/core:latest
+    container_name: firefly
+    restart: unless-stopped
+    env_file: firefly.env
+    volumes:
+      - ./upload:/var/www/html/storage/upload
+    ports:
+      - "8030:8080"
+    depends_on: [firefly-db]
+    networks: [firefly-net]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  firefly-db:
+    image: postgres:16-alpine
+    container_name: firefly-db
+    restart: unless-stopped
+    env_file: firefly-db.env
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    networks: [firefly-net]
+
+networks:
+  firefly-net: { driver: bridge }

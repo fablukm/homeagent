@@ -1,0 +1,14 @@
+id = "long-trip-charge-car"
+description = "#trip event: remind to charge the car the evening before"
+
+[trigger]
+source = "calendar"
+calendars = ["work", "private"]
+
+[match]
+tokens_any = ["trip"]
+
+[[actions]]
+type = "reminder"
+offset = "-1d 20:00"
+text = "Charge the car: {event.title} tomorrow"

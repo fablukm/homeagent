@@ -1,0 +1,9 @@
+[schema]
+trigger_sources = ["calendar", "mail", "task", "task.completed", "schedule", "location", "glasses"]
+match_keys = ["creator", "sender", "label", "title_regex", "title_llm", "tokens_any", "mode", "weekday", "kind"]
+action_types = [
+  "calendar.block", "calendar.invite", "task.create", "task.complete", "mail.label",
+  "paperless.upload", "qrbill.parse", "fintrack.entry", "reminder", "telegram.log", "telegram.ask",
+]
+event_tags = ["kids", "trip", "holiday", "workshop"]
+task_sizes = ["S", "M", "L", "XL"]
