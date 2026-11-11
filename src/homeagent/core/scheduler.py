@@ -1,5 +1,7 @@
 from collections.abc import Callable, Coroutine
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -10,10 +12,17 @@ Job = Callable[[], Coroutine[Any, Any, None]]
 
 class Scheduler:
     def __init__(self, timezone: str) -> None:
+        self.timezone = ZoneInfo(timezone)
         self._inner = AsyncIOScheduler(timezone=timezone)
 
     def every(self, minutes: int, job: Job, name: str) -> None:
-        self._inner.add_job(job, IntervalTrigger(minutes=minutes), id=name, replace_existing=True)
+        self._inner.add_job(
+            job,
+            IntervalTrigger(minutes=minutes),
+            id=name,
+            replace_existing=True,
+            next_run_time=datetime.now(self.timezone),
+        )
 
     def cron(self, expression: str, job: Job, name: str) -> None:
         trigger = CronTrigger.from_crontab(expression)

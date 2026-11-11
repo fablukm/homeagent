@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from datetime import datetime
+from functools import partial
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -14,14 +15,19 @@ import homeagent.sinks.stdout
 import homeagent.sinks.telegram
 from homeagent.api.app import build_app
 from homeagent.config.settings import Secrets, Settings, load_settings
+from homeagent.core.dispatch import Dispatcher
+from homeagent.core.ingest import Ingestor
 from homeagent.core.mode import compute_mode
 from homeagent.core.rules import RuleEngine, TomlRuleStore
 from homeagent.core.scheduler import Scheduler
-from homeagent.db.session import make_engine, upgrade_db
+from homeagent.db.session import make_engine, make_sessions, upgrade_db
 from homeagent.llm.router import LlmRouter
 from homeagent.sinks.base import Topic
 from homeagent.sinks.telegram import TelegramSink
+from homeagent.sources.base import Source
+from homeagent.sources.gmail import GmailSource
 
+GMAIL = "gmail"
 SECONDS_PER_MINUTE = 60
 MINUTES_PER_HOUR = 60
 _ = (
@@ -47,6 +53,14 @@ class Agent:
         self.sink = TelegramSink(
             settings.telegram, secrets.telegram_token.get_secret_value(), self.status
         )
+        sessions = make_sessions(self.engine)
+        self.ingestor = Ingestor(sessions)
+        self.dispatcher = Dispatcher(sessions, self.rules, self.sink)
+        self.sources: list[tuple[Source, int]] = [
+            (GmailSource(cfg, settings.sources.google, secrets), cfg.interval_min)
+            for cfg in settings.sources.email
+            if cfg.name == GMAIL and secrets.google_refresh_token
+        ]
 
     async def status(self) -> str:
         now = datetime.now(ZoneInfo(self.settings.app.timezone))
@@ -56,11 +70,27 @@ class Agent:
         hours, minutes = divmod(uptime.seconds // SECONDS_PER_MINUTE, MINUTES_PER_HOUR)
         return f"up {hours}h{minutes:02d}\nmode {mode.mode} ({mode.reason})\n{rules} rules"
 
+    async def poll(self, source: Source) -> None:
+        report = await self.ingestor.run(source)
+        now = datetime.now(ZoneInfo(self.settings.app.timezone))
+        mode = compute_mode(now, self.settings.mode).mode
+        for event in report.events:
+            await self.dispatcher.run(event, mode)
+        self.log.info(
+            "polled",
+            source=source.name,
+            new=len(report.events),
+            duplicates=report.duplicates,
+            quarantined=report.quarantined,
+        )
+
     async def run(self) -> None:
         await asyncio.to_thread(upgrade_db)
         self.scheduler.every(
             self.settings.llm.health_interval_min, self.router.refresh_health, "llm_health"
         )
+        for source, interval_min in self.sources:
+            self.scheduler.every(interval_min, partial(self.poll, source), f"poll_{source.name}")
         self.scheduler.start()
         await self.sink.start()
         now = datetime.now(ZoneInfo(self.settings.app.timezone))
