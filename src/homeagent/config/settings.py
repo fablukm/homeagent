@@ -149,9 +149,10 @@ class Feedback(BaseModel):
 
 
 class Need(StrEnum):
-    PAY = "pay"
-    APPOINTMENT = "appointment"
     REPLY = "reply"
+    PAY = "pay"
+    TODO = "todo"
+    APPOINTMENT = "appointment"
     KEEP = "keep"
 
 
