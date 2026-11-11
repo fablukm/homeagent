@@ -20,7 +20,7 @@ DUE_FORMAT = "%d.%m.%Y"
 
 
 class MailTriage(BaseModel):
-    needs: list[Need]
+    need: Need | None
     due_date: date | None
     summary: str
 
@@ -54,19 +54,21 @@ class Triage:
         self.sink = sink
         self.zone = ZoneInfo(timezone)
         needs = json.dumps({need.value: text for need, text in cfg.needs.items()}, sort_keys=True)
-        self.version = _sha(cfg.template + needs)[:VERSION_LEN]
+        priority = ",".join(need.value for need in cfg.priority)
+        self.version = _sha(cfg.template + needs + priority)[:VERSION_LEN]
 
     def prompt(self, event: Event) -> str:
         needs = "\n".join(f"{need.value}: {text}" for need, text in self.cfg.needs.items())
         return self.cfg.template.format(
             needs=needs,
+            priority=", ".join(need.value for need in self.cfg.priority),
             sender=event.sender,
             date=event.occurred_at.astimezone(self.zone).date().isoformat(),
             subject=event.title,
             body=event.body[: self.cfg.body_chars],
         )
 
-    async def run(self, event: Event) -> list[Proposal]:
+    async def run(self, event: Event) -> Proposal | None:
         prompt = self.prompt(event)
         call = LlmCall(
             ts=_now(),
@@ -95,31 +97,27 @@ class Triage:
         call.latency_ms = completion.usage.latency_ms
         call.load_ms = completion.usage.load_ms
         call.eval_ms = completion.usage.eval_ms
-        due = triage.due_date.isoformat() if triage.due_date else ""
         async with self.sessions() as session, session.begin():
             session.add(call)
-            await session.flush()
-            proposals = [
-                Proposal(
-                    ts=_now(),
-                    raw_event_id=event.id,
-                    llm_call_id=call.id,
-                    need=need.value,
-                    due=due,
-                    summary=triage.summary,
-                    status=ProposalStatus.PENDING,
-                )
-                for need in dict.fromkeys(triage.needs)
-            ]
-            session.add_all(proposals)
-            await session.flush()
-        for proposal in proposals:
-            ref = await self.sink.ask(Topic.APPROVAL, self.text(event, proposal), str(proposal.id))
-            async with self.sessions() as session, session.begin():
-                stored = await session.get_one(Proposal, proposal.id)
-                stored.message_ref = ref
-            proposal.message_ref = ref
-        return proposals
+        if triage.need is None:
+            return None
+        proposal = Proposal(
+            ts=_now(),
+            raw_event_id=event.id,
+            llm_call_id=call.id,
+            need=triage.need.value,
+            due=triage.due_date.isoformat() if triage.due_date else "",
+            summary=triage.summary,
+            status=ProposalStatus.PENDING,
+        )
+        async with self.sessions() as session, session.begin():
+            session.add(proposal)
+        ref = await self.sink.ask(Topic.APPROVAL, self.text(event, proposal), str(proposal.id))
+        async with self.sessions() as session, session.begin():
+            stored = await session.get_one(Proposal, proposal.id)
+            stored.message_ref = ref
+        proposal.message_ref = ref
+        return proposal
 
     def text(self, event: Event, proposal: Proposal) -> str:
         head = proposal.need

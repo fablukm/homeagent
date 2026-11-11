@@ -98,7 +98,7 @@ class Agent:
 
     async def _triage(self, event: Event) -> int:
         try:
-            return len(await self.triage.run(event))
+            return int(await self.triage.run(event) is not None)
         except NoBackendError:
             self.log.exception("triage failed", raw_event_id=str(event.id))
             return 0

@@ -65,6 +65,7 @@ def test_prompt_names_every_need_and_the_mail(
     assert "2026-11-11" in prompt
     assert "x" * settings.triage.body_chars in prompt
     assert "x" * (settings.triage.body_chars + 1) not in prompt
+    assert "pay, reply, appointment, todo, keep" in prompt
 
 
 def test_prompt_version_follows_template_and_needs(
@@ -74,26 +75,28 @@ def test_prompt_version_follows_template_and_needs(
     same, _, _ = _triage(settings, engine, None, make_router)
     changed_cfg = settings.triage.model_copy(update={"template": settings.triage.template + "!"})
     changed = Triage(changed_cfg, same.sessions, same.router, same.sink, settings.app.timezone)
+    reordered_cfg = settings.triage.model_copy(
+        update={"priority": list(reversed(settings.triage.priority))}
+    )
+    reordered = Triage(reordered_cfg, same.sessions, same.router, same.sink, settings.app.timezone)
 
     assert triage.version == same.version
     assert triage.version != changed.version
+    assert triage.version != reordered.version
 
 
-async def test_each_need_is_asked_once_and_tracked(
+async def test_the_one_need_is_asked_and_tracked(
     settings: Settings, engine: AsyncEngine, make_router: MakeRouter
 ) -> None:
-    answer = MailTriage(
-        needs=[Need.PAY, Need.KEEP, Need.PAY], due_date=date(2026, 11, 30), summary="Power bill"
-    )
+    answer = MailTriage(need=Need.PAY, due_date=date(2026, 11, 30), summary="Power bill")
     triage, sink, sessions = _triage(settings, engine, answer, make_router)
     event = _mail()
 
-    proposals = await triage.run(event)
+    proposal = await triage.run(event)
 
-    assert [p.need for p in proposals] == ["pay", "keep"]
-    assert [(topic, key) for topic, _, key in sink.asked] == [
-        (Topic.APPROVAL, str(p.id)) for p in proposals
-    ]
+    assert proposal is not None
+    assert proposal.need == "pay"
+    assert [(topic, key) for topic, _, key in sink.asked] == [(Topic.APPROVAL, str(proposal.id))]
     first = sink.asked[0][1].splitlines()
     assert first == [
         "pay by 30.11.2026",
@@ -110,8 +113,8 @@ async def test_each_need_is_asked_once_and_tracked(
     assert call.model == "fake-model"
     assert call.output == answer.model_dump(mode="json")
     assert call.valid
-    assert {p.llm_call_id for p in stored} == {call.id}
-    assert {p.message_ref for p in stored} == {"1", "2"}
+    assert [p.llm_call_id for p in stored] == [call.id]
+    assert {p.message_ref for p in stored} == {"1"}
     assert {p.status for p in stored} == {ProposalStatus.PENDING}
     assert {p.due for p in stored} == {"2026-11-30"}
     await engine.dispose()
@@ -120,16 +123,16 @@ async def test_each_need_is_asked_once_and_tracked(
 async def test_no_need_asks_nothing_but_keeps_the_call(
     settings: Settings, engine: AsyncEngine, make_router: MakeRouter
 ) -> None:
-    newsletter = MailTriage(needs=[], due_date=None, summary="Newsletter")
+    newsletter = MailTriage(need=None, due_date=None, summary="Newsletter")
     triage, sink, sessions = _triage(settings, engine, newsletter, make_router)
 
-    assert await triage.run(_mail()) == []
+    assert await triage.run(_mail()) is None
 
     assert sink.asked == []
     async with sessions() as session:
         call = await session.scalar(select(LlmCall))
     assert call is not None
-    assert call.output == {"needs": [], "due_date": None, "summary": "Newsletter"}
+    assert call.output == {"need": None, "due_date": None, "summary": "Newsletter"}
     await engine.dispose()
 
 
@@ -153,9 +156,10 @@ async def test_failed_backend_is_recorded(
 async def test_a_decision_is_recorded_once(
     settings: Settings, engine: AsyncEngine, make_router: MakeRouter
 ) -> None:
-    answer = MailTriage(needs=[Need.REPLY], due_date=None, summary="Question from the Kita")
+    answer = MailTriage(need=Need.REPLY, due_date=None, summary="Question from the Kita")
     triage, _, sessions = _triage(settings, engine, answer, make_router)
-    [proposal] = await triage.run(_mail())
+    proposal = await triage.run(_mail())
+    assert proposal is not None
 
     assert await triage.decide(str(proposal.id), False, USER)
     assert not await triage.decide(str(proposal.id), True, USER)

@@ -1,11 +1,13 @@
 [triage]
 task_class = "classify"
 body_chars = 1500
-template = """You read one email I received and decide which actions it needs from me.
-Actions, pick every one that applies:
+priority = ["pay", "reply", "appointment", "todo", "keep"]
+template = """You read one email I received and decide which single action it needs from me.
+Actions:
 {needs}
-Pick none when the email only informs, advertises, or confirms something already done. Most emails need none.
-due_date: the deadline or event date for the action as YYYY-MM-DD, or null when the email names none.
+need: exactly one action, or null when the email only informs, advertises, or confirms something already done. Most emails need none.
+When several actions apply, pick the first in this order: {priority}.
+due_date: the deadline or event date for that action as YYYY-MM-DD, or null when the email names none.
 summary: the task or event in English, at most 10 words, e.g. "Pay dentist invoice CHF 180".
 
 From: {sender}

@@ -159,6 +159,7 @@ class Need(StrEnum):
 class Triage(BaseModel):
     task_class: str
     body_chars: int
+    priority: list[Need]
     template: str
     needs: dict[Need, str]
 

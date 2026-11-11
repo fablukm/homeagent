@@ -100,7 +100,7 @@ async def test_poll_triages_new_mail(
     async with agent.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sink = StdoutSink()
-    answer = MailTriage(needs=[Need.PAY], due_date=None, summary="A bill")
+    answer = MailTriage(need=Need.PAY, due_date=None, summary="A bill")
     agent.triage.router = make_router(answer)
     agent.triage.sink = sink
 
