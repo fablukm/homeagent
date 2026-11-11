@@ -10,11 +10,10 @@ services:
       - ./data:/app/data
     ports:
       - "8020:8000"
-    networks: [ai-stack_ai-net, paperless_paperless-net, monitoring_monitoring, firefly_firefly-net]
+    networks: [ai-stack_ai-net, paperless_paperless-net, monitoring_monitoring]
     logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
 networks:
   ai-stack_ai-net: { external: true }
   paperless_paperless-net: { external: true }
   monitoring_monitoring: { external: true }
-  firefly_firefly-net: { external: true }

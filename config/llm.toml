@@ -45,6 +45,7 @@ timeout_s = 60
 cloud = true
 secret = "moonshot"
 json_mode = "object"
+sends_temperature = false
 
 [llm.backends.alibaba]
 type = "openai"
