@@ -1,15 +1,20 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from homeagent.config.settings import Secrets, Settings
+from homeagent.config.settings import Need, Secrets, Settings
 from homeagent.core.events import Event, SourceKind
 from homeagent.core.syntax import parse_title
+from homeagent.core.triage import MailTriage
 from homeagent.db.models import Base
+from homeagent.llm.router import LlmRouter
 from homeagent.main import Agent
 from homeagent.sinks.base import Topic
 from homeagent.sinks.stdout import StdoutSink
 from homeagent.sources.base import Source, Upstream
 from homeagent.sources.gmail import GmailSource
+
+type MakeRouter = Callable[[MailTriage | None], LlmRouter]
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -67,4 +72,59 @@ async def test_poll_stores_events_then_runs_rules_once(settings: Settings, tmp_p
     await agent.poll(source)
 
     assert sink.lines == [(Topic.LOG, "paediatrician: blocked 20.11., childcare task set")]
+    await agent.engine.dispose()
+
+
+class OneMail(Source):
+    name = "gmail"
+
+    async def poll(self, cursor: str | None) -> tuple[list[Upstream], str | None]:
+        return [{"id": "mail-1"}], "1"
+
+    def normalise(self, raw: Upstream) -> Event | None:
+        return Event(
+            source=SourceKind.MAIL,
+            source_name=self.name,
+            external_id=str(raw["id"]),
+            occurred_at=datetime(2026, 11, 10, 9, tzinfo=UTC),
+            title="Rechnung",
+            body="CHF 10",
+            sender="billing@example.ch",
+        )
+
+
+async def test_poll_triages_new_mail(
+    settings: Settings, tmp_path: Path, make_router: MakeRouter
+) -> None:
+    agent = _agent(settings, tmp_path)
+    async with agent.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sink = StdoutSink()
+    answer = MailTriage(needs=[Need.PAY], due_date=None, summary="A bill")
+    agent.triage.router = make_router(answer)
+    agent.triage.sink = sink
+
+    await agent.poll(OneMail())
+    await agent.poll(OneMail())
+
+    [(topic, text, key)] = sink.asked
+    assert topic is Topic.APPROVAL
+    assert text.startswith("pay\nA bill")
+    assert await agent.decide(key, True, 1)
+    await agent.engine.dispose()
+
+
+async def test_poll_survives_a_failed_triage(
+    settings: Settings, tmp_path: Path, make_router: MakeRouter
+) -> None:
+    agent = _agent(settings, tmp_path)
+    async with agent.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sink = StdoutSink()
+    agent.triage.router = make_router(None)
+    agent.triage.sink = sink
+
+    await agent.poll(OneMail())
+
+    assert sink.asked == []
     await agent.engine.dispose()

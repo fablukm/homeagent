@@ -8,4 +8,5 @@ FILES: dict[str, str] = {
     "ingest.py": "Ingestor: poll, normalise, hash-dedupe, quarantine, commit, then cursor",
     "google_guard.py": "Google allow-list: reads, label add, creates; no delete/trash/edit",
     "dispatch.py": "Dispatcher: rule_runs for every rule, claim idempotency_key, then run actions",
+    "triage.py": "mail triage: LLM proposes needs, one approval per need, decisions stored",
 }

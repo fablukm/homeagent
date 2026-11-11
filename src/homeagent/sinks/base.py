@@ -8,6 +8,7 @@ class Topic(StrEnum):
     ORDERS = "orders"
     FACTS = "facts"
     LOG = "log"
+    APPROVAL = "approval"
 
 
 class Sink(ABC):
@@ -15,6 +16,9 @@ class Sink(ABC):
 
     @abstractmethod
     async def emit(self, topic: Topic, text: str) -> None: ...
+
+    @abstractmethod
+    async def ask(self, topic: Topic, text: str, key: str) -> str: ...
 
     async def start(self) -> None:
         return None

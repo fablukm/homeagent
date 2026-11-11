@@ -1,0 +1,21 @@
+[triage]
+task_class = "classify"
+body_chars = 1500
+template = """You read one email I received and decide what I must do because of it.
+Possible actions:
+{needs}
+Pick every action that applies. Pick none when the email only informs, advertises or confirms something already done.
+due_date: the deadline for the action as YYYY-MM-DD, or null when the email names none.
+summary: what the email is about, in English, at most 12 words.
+
+From: {sender}
+Date: {date}
+Subject: {subject}
+
+{body}"""
+
+[triage.needs]
+pay = "a bill or payment request that I still have to pay"
+appointment = "I have to book, confirm, move or attend an appointment"
+reply = "someone is waiting for an answer from me"
+keep = "the email carries a document worth filing: contract, policy, certificate, statement, invoice"

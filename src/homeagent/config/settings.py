@@ -1,3 +1,4 @@
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
@@ -20,6 +21,7 @@ CONFIG_FILES = (
     "load.toml",
     "retention.toml",
     "feedback.toml",
+    "triage.toml",
 )
 
 
@@ -43,7 +45,7 @@ class TelegramLimits(BaseModel):
 
 class Telegram(BaseModel):
     chat_id: int
-    topics: dict[Literal["orders", "facts", "log"], int]
+    topics: dict[Literal["orders", "facts", "log", "approval"], int]
     allowed_user_ids: list[int]
     limits: TelegramLimits
 
@@ -146,6 +148,20 @@ class Feedback(BaseModel):
     ask_ttl_hours: int
 
 
+class Need(StrEnum):
+    PAY = "pay"
+    APPOINTMENT = "appointment"
+    REPLY = "reply"
+    KEEP = "keep"
+
+
+class Triage(BaseModel):
+    task_class: str
+    body_chars: int
+    template: str
+    needs: dict[Need, str]
+
+
 class Secrets(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="HOMEAGENT_", env_file=".env", extra="ignore")
 
@@ -187,6 +203,7 @@ class Settings(BaseSettings):
     load: Load
     retention: Retention
     feedback: Feedback
+    triage: Triage
 
     @classmethod
     def settings_customise_sources(

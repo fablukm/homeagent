@@ -6,6 +6,7 @@ allowed_user_ids = [123456789]
 orders = 2
 facts = 4
 log = 6
+approval = 8
 
 [telegram.limits]
 log_lines = 2

@@ -84,11 +84,13 @@ class LlmCall(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     ts: Mapped[int] = mapped_column(Integer)
+    raw_event_id: Mapped[UUID | None] = mapped_column(ForeignKey("raw_events.id"), nullable=True)
     task_class: Mapped[str] = mapped_column(String(KEY_LEN))
     backend: Mapped[str] = mapped_column(String(KEY_LEN))
     model: Mapped[str] = mapped_column(String(ID_LEN))
     prompt_hash: Mapped[str] = mapped_column(String(NAME_LEN))
     schema_name: Mapped[str] = mapped_column(String(NAME_LEN))
+    prompt_version: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
     output: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     valid: Mapped[bool] = mapped_column(default=True)
     confidence: Mapped[float | None] = mapped_column(nullable=True)
@@ -131,6 +133,22 @@ class ActionRow(Base):
     outcome: Mapped[str | None] = mapped_column(String(SHORT_LEN), nullable=True)
     outcome_source: Mapped[str | None] = mapped_column(String(SHORT_LEN), nullable=True)
     outcome_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class Proposal(Base):
+    __tablename__ = "proposals"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    ts: Mapped[int] = mapped_column(Integer)
+    raw_event_id: Mapped[UUID] = mapped_column(ForeignKey("raw_events.id"))
+    llm_call_id: Mapped[UUID] = mapped_column(ForeignKey("llm_calls.id"))
+    need: Mapped[str] = mapped_column(String(SHORT_LEN))
+    due: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    message_ref: Mapped[str] = mapped_column(String(NAME_LEN), default="")
+    status: Mapped[str] = mapped_column(String(SHORT_LEN))
+    decided_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Order(Base):

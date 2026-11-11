@@ -16,12 +16,14 @@ import homeagent.sinks.telegram
 from homeagent.api.app import build_app
 from homeagent.config.settings import Secrets, Settings, load_settings
 from homeagent.core.dispatch import Dispatcher
+from homeagent.core.events import Event, SourceKind
 from homeagent.core.ingest import Ingestor
 from homeagent.core.mode import compute_mode
 from homeagent.core.rules import RuleEngine, TomlRuleStore
 from homeagent.core.scheduler import Scheduler
+from homeagent.core.triage import Triage
 from homeagent.db.session import make_engine, make_sessions, upgrade_db
-from homeagent.llm.router import LlmRouter
+from homeagent.llm.router import LlmRouter, NoBackendError
 from homeagent.sinks.base import Topic
 from homeagent.sinks.telegram import TelegramSink
 from homeagent.sources.base import Source
@@ -51,11 +53,14 @@ class Agent:
         self.router = LlmRouter(settings.llm, secrets)
         self.scheduler = Scheduler(settings.app.timezone)
         self.sink = TelegramSink(
-            settings.telegram, secrets.telegram_token.get_secret_value(), self.status
+            settings.telegram, secrets.telegram_token.get_secret_value(), self.status, self.decide
         )
         sessions = make_sessions(self.engine)
         self.ingestor = Ingestor(sessions)
         self.dispatcher = Dispatcher(sessions, self.rules, self.sink)
+        self.triage = Triage(
+            settings.triage, sessions, self.router, self.sink, settings.app.timezone
+        )
         self.sources: list[tuple[Source, int]] = [
             (GmailSource(cfg, settings.sources.google, secrets), cfg.interval_min)
             for cfg in settings.sources.email
@@ -70,19 +75,33 @@ class Agent:
         hours, minutes = divmod(uptime.seconds // SECONDS_PER_MINUTE, MINUTES_PER_HOUR)
         return f"up {hours}h{minutes:02d}\nmode {mode.mode} ({mode.reason})\n{rules} rules"
 
+    async def decide(self, key: str, accepted: bool, user_id: int) -> bool:
+        return await self.triage.decide(key, accepted, user_id)
+
     async def poll(self, source: Source) -> None:
         report = await self.ingestor.run(source)
         now = datetime.now(ZoneInfo(self.settings.app.timezone))
         mode = compute_mode(now, self.settings.mode).mode
+        proposed = 0
         for event in report.events:
             await self.dispatcher.run(event, mode)
+            if event.source is SourceKind.MAIL:
+                proposed += await self._triage(event)
         self.log.info(
             "polled",
             source=source.name,
             new=len(report.events),
             duplicates=report.duplicates,
             quarantined=report.quarantined,
+            proposed=proposed,
         )
+
+    async def _triage(self, event: Event) -> int:
+        try:
+            return len(await self.triage.run(event))
+        except NoBackendError:
+            self.log.exception("triage failed", raw_event_id=str(event.id))
+            return 0
 
     async def run(self) -> None:
         await asyncio.to_thread(upgrade_db)
