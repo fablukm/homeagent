@@ -4,6 +4,7 @@ from typing import Literal
 import httpx
 import httpx2
 from anthropic import AsyncAnthropic
+from ollama import AsyncClient
 from pydantic import BaseModel
 
 from homeagent.config.settings import LlmBackendCfg, Secrets, Settings
@@ -13,6 +14,7 @@ from homeagent.llm.openai_compat import JSON_ONLY, OpenAICompatBackend
 from homeagent.llm.router import LlmRouter
 
 BASE_URL = "http://llm.test/v1"
+OLLAMA_URL = "http://ollama.test:11434"
 
 
 class Label(BaseModel):
@@ -150,3 +152,34 @@ def test_router_builds_every_configured_backend(settings: Settings) -> None:
     assert isinstance(router.backends["anthropic"], AnthropicBackend)
     cloud = {name for name, backend in router.backends.items() if backend.cloud}
     assert not cloud & {backend.name for backend in router.candidates("classify")}
+
+
+async def test_ollama_turns_thinking_off_and_sends_the_schema() -> None:
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "model": "m",
+                "message": {"role": "assistant", "content": '{"label": "Kita"}'},
+                "done": True,
+                "prompt_eval_count": 9,
+                "eval_count": 4,
+            },
+        )
+
+    cfg = LlmBackendCfg.model_validate(
+        {"type": "ollama", "url": OLLAMA_URL, "model": "m", "timeout_s": 5}
+    )
+    backend = OllamaBackend("pi", cfg, "")
+    backend.client = AsyncClient(host=OLLAMA_URL, transport=httpx.MockTransport(handle))
+
+    result = await backend.complete("kita", Label, temperature=0.0, task_class="classify")
+
+    assert result.value == Label(label="Kita")
+    assert result.usage.prompt_tokens == 9
+    body = json.loads(seen[0].content)
+    assert body["think"] is False
+    assert body["format"] == Label.model_json_schema()

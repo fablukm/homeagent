@@ -26,6 +26,7 @@ class OllamaBackend(LlmBackend):
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             format=schema.model_json_schema(),
+            think=False,
             options={"temperature": temperature},
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
