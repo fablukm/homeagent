@@ -37,7 +37,7 @@ class LlmBackend(ABC):
 
     @abstractmethod
     async def complete[T: BaseModel](
-        self, prompt: str, schema: type[T], *, temperature: float, task_class: str
+        self, prompt: str, schema: type[T], *, system: str, temperature: float, task_class: str
     ) -> Completion[T]: ...
 
     @abstractmethod

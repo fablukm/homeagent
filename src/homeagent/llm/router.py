@@ -35,14 +35,18 @@ class LlmRouter:
         return chosen
 
     async def complete[T: BaseModel](
-        self, task_class: str, prompt: str, schema: type[T]
+        self, task_class: str, prompt: str, schema: type[T], *, system: str
     ) -> Completion[T]:
         route = self.cfg.classes[task_class]
         last: Exception | None = None
         for backend in self.candidates(task_class):
             try:
                 return await backend.complete(
-                    prompt, schema, temperature=route.temperature, task_class=task_class
+                    prompt,
+                    schema,
+                    system=system,
+                    temperature=route.temperature,
+                    task_class=task_class,
                 )
             except Exception as exc:
                 last = exc

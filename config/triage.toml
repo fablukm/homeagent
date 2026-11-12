@@ -2,17 +2,29 @@
 task_class = "classify"
 body_chars = 1500
 priority = ["pay", "reply", "appointment", "todo", "keep"]
-template = """You read one email I received and decide which single action it needs from me.
+instructions = """You read one email I received and decide which single action it needs from me.
 Actions:
 {needs}
-summary: the task or event in English, at most 10 words, e.g. "Pay dentist invoice CHF 180".
-need: exactly one action, or null when the email only informs, advertises, or confirms something already done. Most emails need none.
+none: the email only informs, advertises, thanks me, or confirms something already done. Most emails need none; when in doubt, choose none.
 When several actions apply, pick the first in this order: {priority}.
+
+Threads: only the latest message at the top counts. The quoted thread below it, often my own earlier messages, is context only. If my quoted message asked them something and their latest reply only says noted, we will get back to you, we will forward it, or explains their position, the ball is in their court: none. Never act on my own quoted requests.
+
+Common cases that need none:
+- Acknowledgements such as "Noted, we will get back to you soon" in reply to my message.
+- Confirmations that a form or order I submitted was received, with a link to check its status. Checking a status is not a todo, and an amount reserved or charged automatically is not pay.
+- Automatic acknowledgements and notifications from no-reply senders, such as document share or access requests.
+- Replies that only inform me, thank me, explain a decision, or say they will forward my issue, put it on an agenda, or that someone else will contact me. Choose reply only when the latest message asks me something or requests something from me.
+- Receipts for things already paid, such as hotel bookings.
+- Surveys, thank-you messages, service announcements, terms and privacy policy updates, newsletters, also as PDF attachments.
+
 My preferences come before the definitions:
 {preferences}
-due_date: the deadline or event date for that action as YYYY-MM-DD, or null when the email names none.
 
-From: {sender}
+summary: the task or event in English, at most 10 words.
+need: exactly one action, or none when none applies.
+due_date: the deadline or event date for that action as YYYY-MM-DD, or null when the email names none."""
+template = """From: {sender}
 Date: {date}
 Subject: {subject}
 Attachments: {attachments}
@@ -20,8 +32,8 @@ Attachments: {attachments}
 {body}"""
 
 [triage.needs]
-reply = "A person is waiting for my written answer: a question to me, a request to confirm, decide or send something, an invitation that asks me to reply. Not automated or no-reply senders, not newsletters. Example: the Kita asks whether my child comes on 24.12."
-pay = "I still have to pay money: an open invoice, bill, QR bill, eBill to approve, payment reminder. Not receipts, payment confirmations, orders already paid, or amounts debited automatically. Example: dentist invoice payable within 30 days."
-todo = "Another concrete task only I can do, other than replying or paying: book, register, sign, fill in or submit a form, renew, cancel, order, call someone, download a document that waits in a portal. Not confirmations I triggered myself and handle at once, such as verifying an email address or checking in online. Example: book holiday care at the Kita for 24.12."
+reply = "A person is waiting for my written answer: a question addressed to me, a request to confirm, decide or send something (e.g. an association asking for my new address), a request to reschedule a call or meeting, or an invitation that asks me to reply. Not automated or no-reply senders, not newsletters. Example: the Kita asks whether my child comes on 24.12."
+pay = "I still have to pay money: an open invoice, bill, QR bill, eBill to approve, payment reminder. Not receipts, payment confirmations, orders already paid, or amounts debited or reserved automatically (e.g. a card amount reserved and charged later). Example: dentist invoice payable within 30 days."
+todo = "Another concrete task only I can do, other than replying or paying: book, register, sign, fill in or submit a form, renew, cancel, order, call someone, download a document that waits in a portal. Not confirmations I triggered myself and handle at once, such as verifying an email address or checking in online. Not optional surveys or feedback requests. Example: book holiday care at the Kita for 24.12."
 appointment = "A dated event I attend or must be present for, so it belongs in my calendar: doctor, Kita or school event, meeting, official appointment, and time slots I booked myself where I must be home, such as a delivery window or a workman's visit. Not tickets, hotels or restaurants, and not events of family members that I do not attend. Example: parent evening on 27.11. at 19:30."
-keep = "The email itself carries a document worth filing, attached or in its text: invoice, receipt or ticket with a price, contract, policy, statement, certificate, payslip, tax or medical document. A document that only waits in a portal is todo. Not marketing or plain notifications. Example: annual insurance statement as PDF."
+keep = "The email itself carries a document worth filing, attached or in its text: invoice, receipt or ticket with a price, contract, policy, statement, certificate, payslip, tax or medical document. A document that only waits in a portal is todo. Not marketing, newsletters (even as PDF attachments), or plain notifications. Example: annual insurance statement as PDF."

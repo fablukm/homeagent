@@ -19,12 +19,15 @@ class OllamaBackend(LlmBackend):
         self.client = AsyncClient(host=cfg.url, timeout=cfg.timeout_s)
 
     async def complete[T: BaseModel](
-        self, prompt: str, schema: type[T], *, temperature: float, task_class: str
+        self, prompt: str, schema: type[T], *, system: str, temperature: float, task_class: str
     ) -> Completion[T]:
         started = time.perf_counter()
         response = await self.client.chat(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                *([{"role": "system", "content": system}] if system else []),
+                {"role": "user", "content": prompt},
+            ],
             format=schema.model_json_schema(),
             think=False,
             options={"temperature": temperature},

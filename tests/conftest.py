@@ -38,11 +38,13 @@ class FakeRouter(LlmRouter):
         super().__init__(settings.llm.model_copy(update={"backends": {}}), Secrets())
         self.answer = answer
         self.prompts: list[str] = []
+        self.systems: list[str] = []
 
     async def complete[T: BaseModel](
-        self, task_class: str, prompt: str, schema: type[T]
+        self, task_class: str, prompt: str, schema: type[T], *, system: str
     ) -> Completion[T]:
         self.prompts.append(prompt)
+        self.systems.append(system)
         if self.answer is None:
             raise NoBackendError(task_class) from ConnectionError("down")
         value = schema.model_validate(self.answer.model_dump())

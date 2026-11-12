@@ -1,9 +1,11 @@
+import json
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid7
 
 import pytest
+from conftest import FakeRouter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -68,16 +70,36 @@ def test_prompt_names_every_need_and_the_mail(
     prompt = triage.prompt(_mail(long_body))
 
     for need, text in settings.triage.needs.items():
-        assert f"{need.value}: {text}" in prompt
+        assert f"{need.value}: {text}" in triage.system
+    assert "pay, reply, appointment, todo, keep" in triage.system
+    for preference in settings.preferences.mail:
+        assert f"- {preference}" in triage.system
     assert "billing@example.ch" in prompt
     assert "Rechnung Oktober" in prompt
     assert "2026-11-11" in prompt
     assert "x" * settings.triage.body_chars in prompt
     assert "x" * (settings.triage.body_chars + 1) not in prompt
-    assert "pay, reply, appointment, todo, keep" in prompt
     assert "Rechnung.pdf, QR.png" in prompt
-    for preference in settings.preferences.mail:
-        assert f"- {preference}" in prompt
+    assert "billing@example.ch" not in triage.system
+
+
+async def test_the_instructions_go_to_the_model_as_system_message(
+    settings: Settings, engine: AsyncEngine
+) -> None:
+    router = FakeRouter(settings, MailTriage(summary="Ad", need="none", due_date=None))
+    triage = Triage(
+        settings.triage,
+        settings.preferences.mail,
+        make_sessions(engine),
+        router,
+        StdoutSink(),
+        settings.app.timezone,
+    )
+
+    await triage.run(_mail())
+
+    assert router.systems == [triage.system]
+    assert router.prompts == [triage.prompt(_mail())]
 
 
 def test_prompt_version_follows_template_and_needs(
@@ -114,8 +136,21 @@ def test_prompt_version_follows_template_and_needs(
         settings.app.timezone,
     )
 
+    instructed_cfg = settings.triage.model_copy(
+        update={"instructions": settings.triage.instructions + "!"}
+    )
+    instructed = Triage(
+        instructed_cfg,
+        settings.preferences.mail,
+        same.sessions,
+        same.router,
+        same.sink,
+        settings.app.timezone,
+    )
+
     assert triage.version == same.version
     assert triage.version != changed.version
+    assert triage.version != instructed.version
     assert triage.version != reordered.version
     assert triage.version != preferred.version
 
@@ -158,7 +193,7 @@ async def test_the_one_need_is_asked_and_tracked(
 async def test_no_need_asks_nothing_but_keeps_the_call(
     settings: Settings, engine: AsyncEngine, make_router: MakeRouter
 ) -> None:
-    newsletter = MailTriage(need=None, due_date=None, summary="Newsletter")
+    newsletter = MailTriage(need="none", due_date=None, summary="Newsletter")
     triage, sink, sessions = _triage(settings, engine, newsletter, make_router)
 
     assert await triage.run(_mail()) is None
@@ -167,7 +202,7 @@ async def test_no_need_asks_nothing_but_keeps_the_call(
     async with sessions() as session:
         call = await session.scalar(select(LlmCall))
     assert call is not None
-    assert call.output == {"need": None, "due_date": None, "summary": "Newsletter"}
+    assert call.output == {"summary": "Newsletter", "need": "none", "due_date": None}
     await engine.dispose()
 
 
@@ -207,6 +242,16 @@ async def test_a_decision_is_recorded_once(
     assert stored.decided_by == USER
     assert stored.decided_at is not None
     await engine.dispose()
+
+
+def test_none_is_an_answer_the_model_can_name() -> None:
+    schema = json.dumps(MailTriage.model_json_schema())
+
+    assert '"const": "none"' in schema
+    assert (
+        MailTriage.model_validate({"summary": "Ad", "need": "none", "due_date": None}).need
+        == "none"
+    )
 
 
 def test_the_model_writes_the_summary_before_choosing_the_need() -> None:

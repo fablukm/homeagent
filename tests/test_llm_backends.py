@@ -50,7 +50,9 @@ async def test_openai_compat_sends_schema_and_parses_reply() -> None:
         return _chat_reply('{"label": "SBB"}')
 
     backend = _openai_backend(httpx.MockTransport(handle))
-    result = await backend.complete("ticket", Label, temperature=0.0, task_class="classify")
+    result = await backend.complete(
+        "ticket", Label, system="", temperature=0.0, task_class="classify"
+    )
 
     assert result.value == Label(label="SBB")
     assert result.usage.prompt_tokens == 11
@@ -75,12 +77,16 @@ async def test_openai_compat_object_mode_puts_schema_in_system_message() -> None
     backend = _openai_backend(
         httpx.MockTransport(handle), json_mode="object", sends_temperature=False
     )
-    result = await backend.complete("invoice", Label, temperature=0.2, task_class="classify")
+    result = await backend.complete(
+        "invoice", Label, system="Sort mail.", temperature=0.2, task_class="classify"
+    )
 
     assert result.value == Label(label="Kita")
     body = json.loads(seen[0].content)
     assert body["response_format"] == {"type": "json_object"}
     assert json.dumps(Label.model_json_schema()) in body["messages"][0]["content"]
+    assert body["messages"][0]["content"].startswith("Sort mail.\n\n")
+    assert body["messages"][1] == {"role": "user", "content": "invoice"}
     assert "temperature" not in body
 
 
@@ -124,12 +130,15 @@ async def test_anthropic_backend_parses_structured_output_without_temperature() 
         max_retries=0,
         http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handle)),
     )
-    result = await backend.complete("ticket", Label, temperature=0.2, task_class="answer")
+    result = await backend.complete(
+        "ticket", Label, system="Sort mail.", temperature=0.2, task_class="answer"
+    )
 
     assert result.value == Label(label="SBB")
     assert result.usage.prompt_tokens == 20
     body = json.loads(seen[0].content)
     assert body["output_config"]["format"]["type"] == "json_schema"
+    assert body["system"] == "Sort mail."
     assert "temperature" not in body
 
 
@@ -176,10 +185,16 @@ async def test_ollama_turns_thinking_off_and_sends_the_schema() -> None:
     backend = OllamaBackend("pi", cfg, "")
     backend.client = AsyncClient(host=OLLAMA_URL, transport=httpx.MockTransport(handle))
 
-    result = await backend.complete("kita", Label, temperature=0.0, task_class="classify")
+    result = await backend.complete(
+        "kita", Label, system="Sort mail.", temperature=0.0, task_class="classify"
+    )
 
     assert result.value == Label(label="Kita")
     assert result.usage.prompt_tokens == 9
     body = json.loads(seen[0].content)
     assert body["think"] is False
+    assert body["messages"] == [
+        {"role": "system", "content": "Sort mail."},
+        {"role": "user", "content": "kita"},
+    ]
     assert body["format"] == Label.model_json_schema()

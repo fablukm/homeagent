@@ -40,22 +40,22 @@ class OpenAICompatBackend(LlmBackend):
         self.client = httpx.AsyncClient(base_url=cfg.url, timeout=cfg.timeout_s, headers=headers)
 
     async def complete[T: BaseModel](
-        self, prompt: str, schema: type[T], *, temperature: float, task_class: str
+        self, prompt: str, schema: type[T], *, system: str, temperature: float, task_class: str
     ) -> Completion[T]:
         json_schema = schema.model_json_schema()
         if self.json_mode == "schema":
-            system = JSON_ONLY
+            json_rule = JSON_ONLY
             response_format: dict[str, object] = {
                 "type": "json_schema",
                 "json_schema": {"name": schema.__name__, "schema": json_schema},
             }
         else:
-            system = f"{JSON_ONLY} JSON schema: {json.dumps(json_schema)}"
+            json_rule = f"{JSON_ONLY} JSON schema: {json.dumps(json_schema)}"
             response_format = {"type": "json_object"}
         body: dict[str, object] = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system},
+                {"role": "system", "content": "\n\n".join(p for p in (system, json_rule) if p)},
                 {"role": "user", "content": prompt},
             ],
             "response_format": response_format,

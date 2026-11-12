@@ -1,7 +1,7 @@
-import json
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from hashlib import sha256
+from typing import Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -20,9 +20,12 @@ DUE_FORMAT = "%d.%m.%Y"
 PREFERENCE_MARK = "- "
 
 
+type NoNeed = Literal["none"]
+
+
 class MailTriage(BaseModel):
     summary: str
-    need: Need | None
+    need: Need | NoNeed
     due_date: date | None
 
 
@@ -55,17 +58,15 @@ class Triage:
         self.router = router
         self.sink = sink
         self.zone = ZoneInfo(timezone)
-        self.preferences = "\n".join(f"{PREFERENCE_MARK}{line}" for line in preferences)
-        needs = json.dumps({need.value: text for need, text in cfg.needs.items()}, sort_keys=True)
-        priority = ",".join(need.value for need in cfg.priority)
-        self.version = _sha(cfg.template + needs + priority + self.preferences)[:VERSION_LEN]
+        self.system = cfg.instructions.format(
+            needs="\n".join(f"{need.value}: {text}" for need, text in cfg.needs.items()),
+            priority=", ".join(need.value for need in cfg.priority),
+            preferences="\n".join(f"{PREFERENCE_MARK}{line}" for line in preferences),
+        )
+        self.version = _sha(self.system + cfg.template)[:VERSION_LEN]
 
     def prompt(self, event: Event) -> str:
-        needs = "\n".join(f"{need.value}: {text}" for need, text in self.cfg.needs.items())
         return self.cfg.template.format(
-            needs=needs,
-            priority=", ".join(need.value for need in self.cfg.priority),
-            preferences=self.preferences,
             sender=event.sender,
             date=event.occurred_at.astimezone(self.zone).date().isoformat(),
             subject=event.title,
@@ -81,12 +82,14 @@ class Triage:
             task_class=self.cfg.task_class,
             backend="",
             model="",
-            prompt_hash=_sha(prompt),
+            prompt_hash=_sha(self.system + prompt),
             schema_name=MailTriage.__name__,
             prompt_version=self.version,
         )
         try:
-            completion = await self.router.complete(self.cfg.task_class, prompt, MailTriage)
+            completion = await self.router.complete(
+                self.cfg.task_class, prompt, MailTriage, system=self.system
+            )
         except NoBackendError as exc:
             call.valid = False
             call.error = repr(exc.__cause__ or exc)
@@ -104,7 +107,7 @@ class Triage:
         call.eval_ms = completion.usage.eval_ms
         async with self.sessions() as session, session.begin():
             session.add(call)
-        if triage.need is None:
+        if not isinstance(triage.need, Need):
             return None
         proposal = Proposal(
             ts=_now(),

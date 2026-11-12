@@ -1,6 +1,6 @@
 import time
 
-from anthropic import APIError, AsyncAnthropic
+from anthropic import APIError, AsyncAnthropic, omit
 from pydantic import BaseModel
 
 from homeagent.config.settings import LlmBackendCfg
@@ -22,12 +22,13 @@ class AnthropicBackend(LlmBackend):
         self.client = AsyncAnthropic(api_key=api_key, timeout=cfg.timeout_s)
 
     async def complete[T: BaseModel](
-        self, prompt: str, schema: type[T], *, temperature: float, task_class: str
+        self, prompt: str, schema: type[T], *, system: str, temperature: float, task_class: str
     ) -> Completion[T]:
         started = time.perf_counter()
         response = await self.client.messages.parse(
             model=self.model,
             max_tokens=MAX_TOKENS,
+            system=system or omit,
             messages=[{"role": "user", "content": prompt}],
             output_format=schema,
         )
