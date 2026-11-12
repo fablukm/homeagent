@@ -174,3 +174,7 @@ async def test_a_decision_is_recorded_once(
     assert stored.decided_by == USER
     assert stored.decided_at is not None
     await engine.dispose()
+
+
+def test_the_model_writes_the_summary_before_choosing_the_need() -> None:
+    assert list(MailTriage.model_fields) == ["summary", "need", "due_date"]

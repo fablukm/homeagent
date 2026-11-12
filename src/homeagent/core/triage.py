@@ -20,9 +20,9 @@ DUE_FORMAT = "%d.%m.%Y"
 
 
 class MailTriage(BaseModel):
+    summary: str
     need: Need | None
     due_date: date | None
-    summary: str
 
 
 class ProposalStatus(StrEnum):

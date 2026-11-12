@@ -5,10 +5,10 @@ priority = ["pay", "reply", "appointment", "todo", "keep"]
 template = """You read one email I received and decide which single action it needs from me.
 Actions:
 {needs}
+summary: the task or event in English, at most 10 words, e.g. "Pay dentist invoice CHF 180".
 need: exactly one action, or null when the email only informs, advertises, or confirms something already done. Most emails need none.
 When several actions apply, pick the first in this order: {priority}.
 due_date: the deadline or event date for that action as YYYY-MM-DD, or null when the email names none.
-summary: the task or event in English, at most 10 words, e.g. "Pay dentist invoice CHF 180".
 
 From: {sender}
 Date: {date}
