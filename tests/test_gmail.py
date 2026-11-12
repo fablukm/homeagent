@@ -182,3 +182,19 @@ async def test_ingest_stores_backfill_once_then_follows_history(
     assert second.events == []
     assert second.duplicates == 1
     assert second.cursor == "101"
+
+
+def test_attachment_names_reach_the_event(settings: Settings) -> None:
+    mail = _mails()[0]
+    raw = to_gmail(mail)
+    invoice = {"mimeType": "application/pdf", "filename": "Rechnung.pdf", "body": {"data": ""}}
+    invite = {"mimeType": "text/calendar", "filename": "invite.ics", "body": {"data": ""}}
+    nested = {"mimeType": "multipart/mixed", "parts": [invite]}
+    raw["payload"]["parts"] += [invoice, nested]
+    source = _source(settings, httpx.MockTransport(lambda r: httpx.Response(500)))
+
+    event = source.normalise(raw)
+
+    assert event is not None
+    assert event.payload["attachments"] == ["Rechnung.pdf", "invite.ics"]
+    assert event.body == mail.text

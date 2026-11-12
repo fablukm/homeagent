@@ -69,6 +69,7 @@ class _Part(BaseModel):
     model_config = CAMEL
 
     mime_type: str = ""
+    filename: str = ""
     headers: list[_Header] = Field(default_factory=list[_Header])
     body: _Body = _Body()
     parts: list[_Part] = Field(default_factory=list["_Part"])
@@ -80,6 +81,10 @@ class _Part(BaseModel):
         if self.mime_type == PLAIN and self.body.data:
             return urlsafe_b64decode(self.body.data).decode()
         return next((text for part in self.parts if (text := part.plain_text())), "")
+
+    def filenames(self) -> list[str]:
+        own = [self.filename] if self.filename else []
+        return own + [name for part in self.parts for name in part.filenames()]
 
 
 class _Message(BaseModel):
@@ -128,7 +133,11 @@ class GmailSource(EmailSource):
             title=message.payload.header("Subject"),
             body=message.payload.plain_text() or message.snippet,
             sender=parseaddr(message.payload.header("From"))[1].lower(),
-            payload={"labels": message.label_ids, "thread": message.thread_id},
+            payload={
+                "labels": message.label_ids,
+                "thread": message.thread_id,
+                "attachments": message.payload.filenames(),
+            },
         )
 
     async def access_token(self) -> str:

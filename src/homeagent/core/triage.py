@@ -65,6 +65,7 @@ class Triage:
             sender=event.sender,
             date=event.occurred_at.astimezone(self.zone).date().isoformat(),
             subject=event.title,
+            attachments=", ".join(event.payload.get("attachments", [])),
             body=event.body[: self.cfg.body_chars],
         )
 

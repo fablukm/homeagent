@@ -30,6 +30,7 @@ def _mail(body: str = "Bitte bezahlen Sie CHF 84.20 bis 30.11.") -> Event:
         title="Rechnung Oktober",
         body=body,
         sender="billing@example.ch",
+        payload={"attachments": ["Rechnung.pdf", "QR.png"]},
     )
 
 
@@ -66,6 +67,7 @@ def test_prompt_names_every_need_and_the_mail(
     assert "x" * settings.triage.body_chars in prompt
     assert "x" * (settings.triage.body_chars + 1) not in prompt
     assert "pay, reply, appointment, todo, keep" in prompt
+    assert "Rechnung.pdf, QR.png" in prompt
 
 
 def test_prompt_version_follows_template_and_needs(

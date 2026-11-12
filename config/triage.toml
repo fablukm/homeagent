@@ -13,6 +13,7 @@ summary: the task or event in English, at most 10 words, e.g. "Pay dentist invoi
 From: {sender}
 Date: {date}
 Subject: {subject}
+Attachments: {attachments}
 
 {body}"""
 
