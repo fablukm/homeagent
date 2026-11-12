@@ -59,7 +59,12 @@ class Agent:
         self.ingestor = Ingestor(sessions)
         self.dispatcher = Dispatcher(sessions, self.rules, self.sink)
         self.triage = Triage(
-            settings.triage, sessions, self.router, self.sink, settings.app.timezone
+            settings.triage,
+            settings.preferences.mail,
+            sessions,
+            self.router,
+            self.sink,
+            settings.app.timezone,
         )
         self.sources: list[tuple[Source, int]] = [
             (GmailSource(cfg, settings.sources.google, secrets), cfg.interval_min)

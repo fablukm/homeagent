@@ -12,6 +12,7 @@ def test_triage_describes_every_need(settings: Settings) -> None:
     assert set(settings.triage.needs) == set(Need)
     assert sorted(settings.triage.priority) == sorted(Need)
     assert settings.triage.task_class in settings.llm.classes
+    assert settings.preferences.mail
 
 
 def test_task_sizes_have_hours(settings: Settings) -> None:

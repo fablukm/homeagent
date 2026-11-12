@@ -8,6 +8,8 @@ Actions:
 summary: the task or event in English, at most 10 words, e.g. "Pay dentist invoice CHF 180".
 need: exactly one action, or null when the email only informs, advertises, or confirms something already done. Most emails need none.
 When several actions apply, pick the first in this order: {priority}.
+My preferences come before the definitions:
+{preferences}
 due_date: the deadline or event date for that action as YYYY-MM-DD, or null when the email names none.
 
 From: {sender}

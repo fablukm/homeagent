@@ -22,6 +22,7 @@ CONFIG_FILES = (
     "retention.toml",
     "feedback.toml",
     "triage.toml",
+    "preferences.toml",
 )
 
 
@@ -164,6 +165,10 @@ class Triage(BaseModel):
     needs: dict[Need, str]
 
 
+class Preferences(BaseModel):
+    mail: list[str]
+
+
 class Secrets(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="HOMEAGENT_", env_file=".env", extra="ignore")
 
@@ -206,6 +211,7 @@ class Settings(BaseSettings):
     retention: Retention
     feedback: Feedback
     triage: Triage
+    preferences: Preferences
 
     @classmethod
     def settings_customise_sources(

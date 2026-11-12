@@ -17,6 +17,7 @@ from homeagent.sinks.base import Sink, Topic
 
 VERSION_LEN = 12
 DUE_FORMAT = "%d.%m.%Y"
+PREFERENCE_MARK = "- "
 
 
 class MailTriage(BaseModel):
@@ -43,6 +44,7 @@ class Triage:
     def __init__(
         self,
         cfg: TriageCfg,
+        preferences: list[str],
         sessions: async_sessionmaker[AsyncSession],
         router: LlmRouter,
         sink: Sink,
@@ -53,15 +55,17 @@ class Triage:
         self.router = router
         self.sink = sink
         self.zone = ZoneInfo(timezone)
+        self.preferences = "\n".join(f"{PREFERENCE_MARK}{line}" for line in preferences)
         needs = json.dumps({need.value: text for need, text in cfg.needs.items()}, sort_keys=True)
         priority = ",".join(need.value for need in cfg.priority)
-        self.version = _sha(cfg.template + needs + priority)[:VERSION_LEN]
+        self.version = _sha(cfg.template + needs + priority + self.preferences)[:VERSION_LEN]
 
     def prompt(self, event: Event) -> str:
         needs = "\n".join(f"{need.value}: {text}" for need, text in self.cfg.needs.items())
         return self.cfg.template.format(
             needs=needs,
             priority=", ".join(need.value for need in self.cfg.priority),
+            preferences=self.preferences,
             sender=event.sender,
             date=event.occurred_at.astimezone(self.zone).date().isoformat(),
             subject=event.title,

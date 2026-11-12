@@ -48,7 +48,15 @@ def _triage(
     sink = StdoutSink()
     sessions = make_sessions(engine)
     router = make_router(answer)
-    return Triage(settings.triage, sessions, router, sink, settings.app.timezone), sink, sessions
+    triage = Triage(
+        settings.triage,
+        settings.preferences.mail,
+        sessions,
+        router,
+        sink,
+        settings.app.timezone,
+    )
+    return triage, sink, sessions
 
 
 def test_prompt_names_every_need_and_the_mail(
@@ -68,6 +76,8 @@ def test_prompt_names_every_need_and_the_mail(
     assert "x" * (settings.triage.body_chars + 1) not in prompt
     assert "pay, reply, appointment, todo, keep" in prompt
     assert "Rechnung.pdf, QR.png" in prompt
+    for preference in settings.preferences.mail:
+        assert f"- {preference}" in prompt
 
 
 def test_prompt_version_follows_template_and_needs(
@@ -76,15 +86,38 @@ def test_prompt_version_follows_template_and_needs(
     triage, _, _ = _triage(settings, engine, None, make_router)
     same, _, _ = _triage(settings, engine, None, make_router)
     changed_cfg = settings.triage.model_copy(update={"template": settings.triage.template + "!"})
-    changed = Triage(changed_cfg, same.sessions, same.router, same.sink, settings.app.timezone)
+    changed = Triage(
+        changed_cfg,
+        settings.preferences.mail,
+        same.sessions,
+        same.router,
+        same.sink,
+        settings.app.timezone,
+    )
     reordered_cfg = settings.triage.model_copy(
         update={"priority": list(reversed(settings.triage.priority))}
     )
-    reordered = Triage(reordered_cfg, same.sessions, same.router, same.sink, settings.app.timezone)
+    reordered = Triage(
+        reordered_cfg,
+        settings.preferences.mail,
+        same.sessions,
+        same.router,
+        same.sink,
+        settings.app.timezone,
+    )
+    preferred = Triage(
+        settings.triage,
+        [*settings.preferences.mail, "Concert tickets need no action."],
+        same.sessions,
+        same.router,
+        same.sink,
+        settings.app.timezone,
+    )
 
     assert triage.version == same.version
     assert triage.version != changed.version
     assert triage.version != reordered.version
+    assert triage.version != preferred.version
 
 
 async def test_the_one_need_is_asked_and_tracked(

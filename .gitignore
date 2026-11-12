@@ -17,6 +17,7 @@ data/
 # personal config: copy the .example files
 config/sources.toml
 config/telegram.toml
+config/preferences.toml
 rules/
 
 # agent development: local only, never on GitHub
