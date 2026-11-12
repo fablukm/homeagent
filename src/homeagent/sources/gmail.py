@@ -134,6 +134,7 @@ class GmailSource(EmailSource):
             body=message.payload.plain_text() or message.snippet,
             sender=parseaddr(message.payload.header("From"))[1].lower(),
             payload={
+                "from": message.payload.header("From"),
                 "labels": message.label_ids,
                 "thread": message.thread_id,
                 "attachments": message.payload.filenames(),

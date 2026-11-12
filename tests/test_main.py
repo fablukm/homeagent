@@ -2,11 +2,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from homeagent.config.settings import Need, Secrets, Settings
+from conftest import MakeDecider
+
+from homeagent.config.settings import Secrets, Settings
 from homeagent.core.events import Event, SourceKind
 from homeagent.core.syntax import parse_title
-from homeagent.core.triage import MailTriage
+from homeagent.core.triage import MailSummary
 from homeagent.db.models import Base
+from homeagent.llm.laya import LayaBackend
 from homeagent.llm.router import LlmRouter
 from homeagent.main import Agent
 from homeagent.sinks.base import Topic
@@ -14,7 +17,7 @@ from homeagent.sinks.stdout import StdoutSink
 from homeagent.sources.base import Source, Upstream
 from homeagent.sources.gmail import GmailSource
 
-type MakeRouter = Callable[[MailTriage | None], LlmRouter]
+type MakeRouter = Callable[[MailSummary | None], LlmRouter]
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -90,18 +93,20 @@ class OneMail(Source):
             title="Rechnung",
             body="CHF 10",
             sender="billing@example.ch",
+            payload={"from": "Billing <billing@example.ch>"},
         )
 
 
 async def test_poll_triages_new_mail(
-    settings: Settings, tmp_path: Path, make_router: MakeRouter
+    settings: Settings, tmp_path: Path, make_router: MakeRouter, make_decider: MakeDecider
 ) -> None:
     agent = _agent(settings, tmp_path)
     async with agent.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sink = StdoutSink()
-    answer = MailTriage(need=Need.PAY, due_date=None, summary="A bill")
+    answer = MailSummary(due_date=None, summary="A bill")
     agent.triage.router = make_router(answer)
+    agent.triage.decider = make_decider("pay", 1.0)
     agent.triage.sink = sink
 
     await agent.poll(OneMail())
@@ -115,16 +120,25 @@ async def test_poll_triages_new_mail(
 
 
 async def test_poll_survives_a_failed_triage(
-    settings: Settings, tmp_path: Path, make_router: MakeRouter
+    settings: Settings, tmp_path: Path, make_router: MakeRouter, make_decider: MakeDecider
 ) -> None:
     agent = _agent(settings, tmp_path)
     async with agent.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sink = StdoutSink()
     agent.triage.router = make_router(None)
+    agent.triage.decider = make_decider(None, 1.0)
     agent.triage.sink = sink
 
     await agent.poll(OneMail())
 
     assert sink.asked == []
     await agent.engine.dispose()
+
+
+def test_triage_decides_with_the_configured_laya(settings: Settings, tmp_path: Path) -> None:
+    agent = _agent(settings, tmp_path)
+    laya = settings.llm.backends[settings.triage.laya.backend]
+
+    assert isinstance(agent.triage.decider, LayaBackend)
+    assert agent.triage.decider.model == laya.model

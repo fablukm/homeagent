@@ -157,6 +157,20 @@ class Need(StrEnum):
     KEEP = "keep"
 
 
+class SkipRule(BaseModel):
+    reason: str
+    field: Literal["subject", "sender", "body", "attachments"]
+    pattern: str
+
+
+class LayaQuestion(BaseModel):
+    backend: str
+    question: str
+    instructions: str
+    criteria: dict[str, str]
+    check_below: float
+
+
 class Triage(BaseModel):
     task_class: str
     body_chars: int
@@ -164,10 +178,13 @@ class Triage(BaseModel):
     instructions: str
     template: str
     needs: dict[Need, str]
+    laya: LayaQuestion
+    skip: list[SkipRule]
 
 
 class Preferences(BaseModel):
     mail: list[str]
+    skip: list[SkipRule]
 
 
 class Secrets(BaseSettings):

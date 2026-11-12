@@ -9,6 +9,7 @@ import uvicorn
 
 import homeagent.actions.telegram_log
 import homeagent.llm.anthropic
+import homeagent.llm.laya
 import homeagent.llm.ollama
 import homeagent.llm.openai_compat
 import homeagent.sinks.stdout
@@ -23,6 +24,7 @@ from homeagent.core.rules import RuleEngine, TomlRuleStore
 from homeagent.core.scheduler import Scheduler
 from homeagent.core.triage import Triage
 from homeagent.db.session import make_engine, make_sessions, upgrade_db
+from homeagent.llm.base import DECISION_BACKENDS
 from homeagent.llm.router import LlmRouter, NoBackendError
 from homeagent.sinks.base import Topic
 from homeagent.sinks.telegram import TelegramSink
@@ -35,6 +37,7 @@ MINUTES_PER_HOUR = 60
 _ = (
     homeagent.actions.telegram_log,
     homeagent.llm.anthropic,
+    homeagent.llm.laya,
     homeagent.llm.ollama,
     homeagent.llm.openai_compat,
     homeagent.sinks.stdout,
@@ -58,11 +61,15 @@ class Agent:
         sessions = make_sessions(self.engine)
         self.ingestor = Ingestor(sessions)
         self.dispatcher = Dispatcher(sessions, self.rules, self.sink)
+        decider_name = settings.triage.laya.backend
+        decider_cfg = settings.llm.backends[decider_name]
+        decider = DECISION_BACKENDS.get(decider_cfg.type)(decider_name, decider_cfg)
         self.triage = Triage(
             settings.triage,
-            settings.preferences.mail,
+            settings.preferences,
             sessions,
             self.router,
+            decider,
             self.sink,
             settings.app.timezone,
         )

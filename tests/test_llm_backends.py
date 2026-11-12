@@ -3,15 +3,18 @@ from typing import Literal
 
 import httpx
 import httpx2
+import pytest
 from anthropic import AsyncAnthropic
 from ollama import AsyncClient
 from pydantic import BaseModel
 
 from homeagent.config.settings import LlmBackendCfg, Secrets, Settings
 from homeagent.llm.anthropic import AnthropicBackend
+from homeagent.llm.base import Question
+from homeagent.llm.laya import LayaBackend
 from homeagent.llm.ollama import OllamaBackend
 from homeagent.llm.openai_compat import JSON_ONLY, OpenAICompatBackend
-from homeagent.llm.router import LlmRouter
+from homeagent.llm.router import LlmRouter, NoBackendError
 
 BASE_URL = "http://llm.test/v1"
 OLLAMA_URL = "http://ollama.test:11434"
@@ -198,3 +201,88 @@ async def test_ollama_turns_thinking_off_and_sends_the_schema() -> None:
         {"role": "user", "content": "kita"},
     ]
     assert body["format"] == Label.model_json_schema()
+
+
+LAYA_URL = "http://laya.test:8080"
+LAYA_REPLY = {
+    "model": "laya-rl-agent",
+    "answers": {
+        "action": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {"none": 0.8418, "pay": 0.1582},
+            "confidence": 0.6169,
+            "answer_confidence": 0.8418,
+            "action": {"act_probability": 1.0},
+            "x_jev_confidence": 0.8102,
+        }
+    },
+    "usage": {"input_tokens": 886, "output_tokens": 0, "truncated": False},
+    "routing": {"model": "triage", "reason": "explicit model='triage'"},
+}
+
+
+def _laya(transport: httpx.MockTransport) -> LayaBackend:
+    cfg = LlmBackendCfg.model_validate(
+        {"type": "laya", "url": LAYA_URL, "model": "triage", "timeout_s": 5}
+    )
+    backend = LayaBackend("laya", cfg)
+    backend.client = httpx.AsyncClient(base_url=LAYA_URL, transport=transport)
+    return backend
+
+
+async def test_laya_names_its_model_and_reads_the_top_probability() -> None:
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=LAYA_REPLY)
+
+    question = Question("action", "choice", "Which action?", {"none": "Nothing.", "pay": "Pay."})
+    state = {"from": "A <a@example.ch>", "subject": "Hi", "attachments": "", "body": "Text"}
+
+    decision = await _laya(httpx.MockTransport(handle)).decide(state, [question])
+
+    [request] = seen
+    assert request.url.path == "/v1/systemone"
+    assert json.loads(request.content) == {
+        "model": "triage",
+        "state": state,
+        "questions": {
+            "action": {
+                "type": "choice",
+                "instructions": "Which action?",
+                "criteria": {"none": "Nothing.", "pay": "Pay."},
+            }
+        },
+    }
+    [answer] = decision.answers
+    assert answer.question_id == "action"
+    assert answer.value == "none"
+    assert answer.confidence == 0.8418
+    assert answer.probabilities == {"none": 0.8418, "pay": 0.1582}
+    assert decision.usage.prompt_tokens == 886
+    assert decision.model == "triage"
+    assert decision.backend == "laya"
+
+
+async def test_laya_failure_is_no_backend() -> None:
+    def broken(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"detail": "inference failed"})
+
+    question = Question("action", "choice", "Which action?", {"none": "Nothing."})
+
+    with pytest.raises(NoBackendError):
+        await _laya(httpx.MockTransport(broken)).decide({"body": "x"}, [question])
+
+
+async def test_laya_health_follows_health_endpoint() -> None:
+    def ok(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/health"
+        return httpx.Response(200, json={"status": "ok", "loaded": ["triage"]})
+
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    assert await _laya(httpx.MockTransport(ok)).healthy()
+    assert not await _laya(httpx.MockTransport(unreachable)).healthy()

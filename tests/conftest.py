@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from homeagent.config.settings import CONFIG_FILES, Secrets, Settings, load_settings
-from homeagent.core.triage import MailTriage
-from homeagent.llm.base import Completion, Usage
+from homeagent.config.settings import CONFIG_FILES, LlmBackendCfg, Secrets, Settings, load_settings
+from homeagent.core.triage import MailSummary
+from homeagent.llm.base import Answer, Completion, Decision, DecisionBackend, Question, Usage
 from homeagent.llm.router import LlmRouter, NoBackendError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,7 +34,7 @@ def settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
 
 
 class FakeRouter(LlmRouter):
-    def __init__(self, settings: Settings, answer: MailTriage | None) -> None:
+    def __init__(self, settings: Settings, answer: MailSummary | None) -> None:
         super().__init__(settings.llm.model_copy(update={"backends": {}}), Secrets())
         self.answer = answer
         self.prompts: list[str] = []
@@ -51,9 +51,47 @@ class FakeRouter(LlmRouter):
         return Completion(value, Usage(prompt_tokens=7, latency_ms=3), "fake-model", "fake")
 
 
-type MakeRouter = Callable[[MailTriage | None], FakeRouter]
+type MakeRouter = Callable[[MailSummary | None], FakeRouter]
 
 
 @pytest.fixture
 def make_router(settings: Settings) -> MakeRouter:
     return lambda answer: FakeRouter(settings, answer)
+
+
+class FakeDecider(DecisionBackend):
+    def __init__(self, name: str, cfg: LlmBackendCfg) -> None:
+        self.name = name
+        self.model = cfg.model
+        self.choice: str | None = "none"
+        self.confidence = 1.0
+        self.states: list[dict[str, str]] = []
+        self.questions: list[Question] = []
+
+    async def decide(self, state: dict[str, str], questions: list[Question]) -> Decision:
+        self.states.append(state)
+        self.questions.extend(questions)
+        if self.choice is None:
+            raise NoBackendError(self.name) from ConnectionError("laya down")
+        answer = Answer(
+            questions[0].id, self.choice, self.confidence, {self.choice: self.confidence}
+        )
+        return Decision([answer], Usage(prompt_tokens=5, latency_ms=2), self.model, self.name)
+
+    async def healthy(self) -> bool:
+        return True
+
+
+type MakeDecider = Callable[[str | None, float], FakeDecider]
+
+
+@pytest.fixture
+def make_decider(settings: Settings) -> MakeDecider:
+    def make(choice: str | None, confidence: float) -> FakeDecider:
+        name = settings.triage.laya.backend
+        decider = FakeDecider(name, settings.llm.backends[name])
+        decider.choice = choice
+        decider.confidence = confidence
+        return decider
+
+    return make

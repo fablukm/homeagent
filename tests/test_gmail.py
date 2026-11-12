@@ -129,6 +129,7 @@ def test_twenty_fixture_mails_normalise_to_events(settings: Settings) -> None:
         assert event.title == mail.subject
         assert event.occurred_at == mail.date
         assert event.sender == mail.sender.split("<")[1].rstrip(">").lower()
+        assert event.payload["from"] == mail.sender
         assert event.body == (mail.snippet if mail.html_only else mail.text)
         assert event.payload["thread"] == f"t-{mail.id}"
 

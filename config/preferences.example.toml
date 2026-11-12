@@ -4,3 +4,8 @@ mail = [
     "My health insurer's portal: a new claim statement needs nothing, new correspondence, documents or policies are a todo to download them.",
     "Calendar invitations from my partner need no action: they are already in my calendar.",
 ]
+
+[[preferences.skip]]
+reason = "never sender"
+field = "sender"
+pattern = '(?i)@spam-sender\.example$'

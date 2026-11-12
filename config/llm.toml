@@ -66,7 +66,7 @@ secret = "anthropic"
 [llm.backends.laya]
 type = "laya"
 url = "http://laya-serve:8080"
-model = "laya-multilingual"
+model = "triage"
 timeout_s = 30
 
 [llm.classes.classify]

@@ -13,6 +13,9 @@ def test_triage_describes_every_need(settings: Settings) -> None:
     assert sorted(settings.triage.priority) == sorted(Need)
     assert settings.triage.task_class in settings.llm.classes
     assert settings.preferences.mail
+    assert settings.llm.backends[settings.triage.laya.backend].type == "laya"
+    assert 0 < settings.triage.laya.check_below < 1
+    assert settings.triage.skip
 
 
 def test_task_sizes_have_hours(settings: Settings) -> None:
