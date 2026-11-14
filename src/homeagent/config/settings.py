@@ -35,6 +35,8 @@ class App(BaseModel):
     api_host: str
     api_port: int
     log_level: str
+    quiet_loggers: list[str]
+    error_repeat_min: int
 
 
 class TelegramLimits(BaseModel):
@@ -171,20 +173,74 @@ class LayaQuestion(BaseModel):
     check_below: float
 
 
+class MailTextCfg(BaseModel):
+    reply_markers: str
+    outlook_header: str
+    forward: str
+    forward_lookback: int
+    quote_prefix: str
+    footer: str
+    markdown_link: str
+    url: str
+    signature: str
+    quote_chars: int
+    months: dict[str, int]
+    weekdays: dict[str, int]
+    units: dict[str, int]
+    number_words: dict[str, int]
+    relative: dict[str, int]
+    next_week: str
+    month_end: str
+
+
+class TriageRules(BaseModel):
+    deadline_actions: list[Need]
+    strong_deadline: str
+    not_deadline: str
+    reminder: str
+    invoice_number: str
+    org_noise: str
+    pay_task: str
+    description: str
+    description_date: str
+    private_domains: list[str]
+    invoice_days: int
+    sunday_margin: int
+
+
+class NodePrompt(BaseModel):
+    system: str
+    closing: str
+
+
+class TriagePrompts(BaseModel):
+    field: str
+    indent: str
+    day: str
+    received: str
+    date_line: str
+    task: NodePrompt
+    deadline: NodePrompt
+
+
 class Triage(BaseModel):
     task_class: str
     body_chars: int
     priority: list[Need]
-    instructions: str
-    template: str
     needs: dict[Need, str]
     laya: LayaQuestion
     skip: list[SkipRule]
+    text: MailTextCfg
+    rules: TriageRules
+    prompts: TriagePrompts
 
 
 class Preferences(BaseModel):
     mail: list[str]
     skip: list[SkipRule]
+    about_me: list[str]
+    task_instructions: str
+    deadline_instructions: str
 
 
 class Secrets(BaseSettings):

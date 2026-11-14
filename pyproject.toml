@@ -17,6 +17,7 @@ dependencies = [
     "ollama>=0.5",
     "anthropic>=0.50",
     "httpx>=0.28",
+    "langgraph>=1.2.22",
 ]
 
 [project.scripts]

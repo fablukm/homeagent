@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import StrEnum
 
 from homeagent.core.registry import Registry
@@ -11,6 +12,20 @@ class Topic(StrEnum):
     APPROVAL = "approval"
 
 
+@dataclass(frozen=True)
+class Button:
+    label: str
+    op: str
+    arg: str = ""
+
+
+@dataclass(frozen=True)
+class Card:
+    key: str
+    text: str
+    buttons: tuple[tuple[Button, ...], ...] = ()
+
+
 class Sink(ABC):
     name: str
 
@@ -18,7 +33,7 @@ class Sink(ABC):
     async def emit(self, topic: Topic, text: str) -> None: ...
 
     @abstractmethod
-    async def ask(self, topic: Topic, text: str, key: str) -> str: ...
+    async def ask(self, topic: Topic, card: Card) -> str: ...
 
     async def start(self) -> None:
         return None

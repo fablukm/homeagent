@@ -199,3 +199,43 @@ def test_attachment_names_reach_the_event(settings: Settings) -> None:
     assert event is not None
     assert event.payload["attachments"] == ["Rechnung.pdf", "invite.ics"]
     assert event.body == mail.text
+
+
+def _raw(parts: list[dict[str, object]], snippet: str = "preview") -> Upstream:
+    return {
+        "id": "x1",
+        "internalDate": "1763000000000",
+        "snippet": snippet,
+        "payload": {"mimeType": "multipart/mixed", "headers": [], "parts": parts},
+    }
+
+
+def _part(mime: str, data: bytes, filename: str = "") -> dict[str, object]:
+    encoded = urlsafe_b64encode(data).decode()
+    return {"mimeType": mime, "filename": filename, "body": {"data": encoded}}
+
+
+def test_body_is_read_as_the_dataset_was_fetched(settings: Settings) -> None:
+    source = _source(settings, httpx.MockTransport(lambda request: httpx.Response(500)))
+    html = (
+        b"<html><head><title>x</title></head><style>p{}</style><script>var a;</script>"
+        b"<p>Guten&nbsp;Tag</p><div>Bitte  zahlen<br>bis 30.11.</div><p></p><p></p>"
+        b"<table><tr><td>CHF</td><td>120</td></tr></table></html>"
+    )
+    html_only = source.normalise(_raw([_part("text/html", html)]))
+    nested: list[dict[str, object]] = [
+        {"mimeType": "multipart/alternative", "parts": [_part("text/plain", b"first\n")]},
+        _part("text/plain", b"second \xff"),
+        _part("text/plain", b"attached notes", "notes.txt"),
+        _part("text/html", b"<p>ignored when plain text exists</p>"),
+    ]
+    plain = source.normalise(_raw(nested))
+    empty = source.normalise(_raw([_part("text/html", b"<p> </p>")]))
+
+    assert html_only is not None
+    assert html_only.body == "Guten Tag\n Bitte zahlen\nbis 30.11.\n\n CHF 120"
+    assert plain is not None
+    assert plain.body == "first\n\nsecond �"
+    assert plain.payload["attachments"] == ["notes.txt"]
+    assert empty is not None
+    assert empty.body == "preview"

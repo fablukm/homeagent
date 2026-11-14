@@ -13,6 +13,12 @@ url = "http://ollama:11434"
 model = "qwen3.5:2b"
 timeout_s = 120
 
+[llm.backends.pi-gemma]
+type = "ollama"
+url = "http://ollama:11434"
+model = "gemma4-e2b-q4km"
+timeout_s = 120
+
 [llm.backends.zotac]
 type = "openai"
 url = "http://box:8080/v1"
@@ -73,7 +79,7 @@ timeout_s = 30
 backends = ["pi", "pi-qwen"]
 
 [llm.classes.extract]
-backends = ["pi", "pi-qwen"]
+backends = ["pi-gemma"]
 
 [llm.classes.rule_gen]
 backends = ["zotac", "pi"]

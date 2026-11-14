@@ -1,7 +1,17 @@
 from datetime import datetime
 from uuid import UUID, uuid7
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 ID_LEN = 256
@@ -143,8 +153,14 @@ class Proposal(Base):
     raw_event_id: Mapped[UUID] = mapped_column(ForeignKey("raw_events.id"))
     llm_call_id: Mapped[UUID] = mapped_column(ForeignKey("llm_calls.id"))
     need: Mapped[str] = mapped_column(String(SHORT_LEN))
+    unsure: Mapped[bool] = mapped_column(Boolean, default=False)
     due: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
+    deadline: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
     summary: Mapped[str] = mapped_column(Text, default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    final_need: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
+    final_due: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
+    final_summary: Mapped[str] = mapped_column(Text, default="")
     message_ref: Mapped[str] = mapped_column(String(NAME_LEN), default="")
     status: Mapped[str] = mapped_column(String(SHORT_LEN))
     decided_at: Mapped[int | None] = mapped_column(Integer, nullable=True)

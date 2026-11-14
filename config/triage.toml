@@ -1,26 +1,7 @@
 [triage]
-task_class = "classify"
+task_class = "extract"
 body_chars = 1500
 priority = ["pay", "reply", "appointment", "todo", "keep"]
-instructions = """You read one email I received. The first line names the action it needs from me. Write what I need to know to do that action.
-Actions, in order of priority ({priority}):
-{needs}
-none: probably no action; I only check that nothing is needed.
-
-Threads: only the latest message at the top counts. The quoted thread below it is context only.
-
-My preferences:
-{preferences}
-
-summary: the task or event in English, at most 10 words.
-due_date: the deadline or event date for that action as YYYY-MM-DD, or null when the email names none."""
-template = """Action: {action}
-From: {sender}
-Date: {date}
-Subject: {subject}
-Attachments: {attachments}
-
-{body}"""
 
 [triage.needs]
 reply = "A person is waiting for my written answer: a question addressed to me, a request to confirm, decide or send something (e.g. an association asking for my new address), a request to reschedule a call or meeting, or an invitation that asks me to reply. Not automated or no-reply senders, not newsletters. Example: the Kita asks whether my child comes on 24.12."
@@ -33,7 +14,7 @@ keep = "The email itself carries a document worth filing, attached or in its tex
 backend = "laya"
 question = "action"
 instructions = "Which single action does this email I received need from me?"
-check_below = 0.9
+check_below = 0.95
 
 [triage.laya.criteria]
 none = "No action: the email only informs, advertises, or confirms something already done. Most emails need none."
@@ -77,3 +58,256 @@ pattern = '(?i)Rechnung bezahlt|Zahlungsbestätigung|payment confirmation|Danke 
 reason = "insurance statement"
 field = "subject"
 pattern = '(?i)^\s*Neue Leistungsabrechnung'
+
+[triage.text]
+reply_markers = '''(?im)^\s*(on .{5,120} wrote:|am .{5,120} schrieb .{0,120}:|le .{5,120} a écrit\s*:|-{2,}\s*(original message|ursprüngliche nachricht|message d'origine)\s*-{2,})'''
+outlook_header = '(?im)^\s*(von|from|de)\s*:.*\n(.*\n){0,2}\s*(gesendet|sent|envoyé|date)\s*:'
+forward = '(?i)(forwarded message|weitergeleitete nachricht|message transféré|begin forwarded)'
+forward_lookback = 200
+quote_prefix = ">"
+footer = '(?i)(unsubscribe|abmelden|abbestellen|désinscri|desinscri|datenschutz|privacy|impressum|this e-?mail (is|was|and|may)|diese e-?mail (ist|wurde|enthält|kann)|vertraulich|confidential|follow us|folgen sie uns|app store|google play|im browser|view in browser|web-?version)'
+markdown_link = '\[([^\]]*)\]\([^)]*\)'
+url = '<?(https?://|www\.)\S+>?'
+signature = '^(--\s*|_{4,}.*|-{4,}.*)$'
+quote_chars = 40
+next_week = "(nächste[nr]? woche|next week|la semaine prochaine|semaine prochaine)"
+month_end = "(ende (des )?monats?|end of (the )?month|fin du mois)"
+
+[triage.text.months]
+jan = 1
+januar = 1
+january = 1
+janvier = 1
+"jänner" = 1
+feb = 2
+februar = 2
+february = 2
+"février" = 2
+fevrier = 2
+"mär" = 3
+mar = 3
+"märz" = 3
+maerz = 3
+march = 3
+mars = 3
+apr = 4
+april = 4
+avril = 4
+mai = 5
+may = 5
+jun = 6
+juni = 6
+june = 6
+juin = 6
+jul = 7
+juli = 7
+july = 7
+juillet = 7
+aug = 8
+august = 8
+"août" = 8
+aout = 8
+sep = 9
+sept = 9
+september = 9
+septembre = 9
+okt = 10
+oct = 10
+oktober = 10
+october = 10
+octobre = 10
+nov = 11
+november = 11
+novembre = 11
+dez = 12
+dec = 12
+dezember = 12
+december = 12
+"décembre" = 12
+decembre = 12
+
+[triage.text.weekdays]
+montag = 0
+monday = 0
+lundi = 0
+dienstag = 1
+tuesday = 1
+mardi = 1
+mittwoch = 2
+wednesday = 2
+mercredi = 2
+donnerstag = 3
+thursday = 3
+jeudi = 3
+freitag = 4
+friday = 4
+vendredi = 4
+samstag = 5
+saturday = 5
+samedi = 5
+sonntag = 6
+sunday = 6
+dimanche = 6
+
+[triage.text.units]
+tag = 1
+tage = 1
+tagen = 1
+day = 1
+days = 1
+jour = 1
+jours = 1
+woche = 7
+wochen = 7
+week = 7
+weeks = 7
+semaine = 7
+semaines = 7
+monat = 30
+monate = 30
+monaten = 30
+month = 30
+months = 30
+mois = 30
+
+[triage.text.number_words]
+einem = 1
+einer = 1
+one = 1
+zwei = 2
+two = 2
+drei = 3
+three = 3
+vier = 4
+four = 4
+"fünf" = 5
+five = 5
+sechs = 6
+six = 6
+sieben = 7
+seven = 7
+zehn = 10
+ten = 10
+vierzehn = 14
+fourteen = 14
+dreissig = 30
+"dreißig" = 30
+thirty = 30
+
+[triage.text.relative]
+heute = 0
+today = 0
+"aujourd'hui" = 0
+morgen = 1
+tomorrow = 1
+demain = 1
+"übermorgen" = 2
+
+[triage.rules]
+deadline_actions = ["pay", "reply", "todo"]
+strong_deadline = '(?i)(zahlbar|fällig|faellig|zahlungsfrist|spätestens|spaetestens|bis zum|bis am|innert|innerhalb|frist|deadline|due|payable|à payer|a payer|avant le|délai|delai|until|by |bis |expires?|ablauf|läuft|gültig|valid|anmeldeschluss|einsendeschluss|jusqu)'
+not_deadline = '(?i)(termin|uhr\b|\d{1,2}[:.]\d{2}|appointment|rendez|lieferung|geliefert|delivery|livraison|rechnungsdatum|invoice date|datum:|date:|öffnungszeit|opening|bestell|order date|versand|shipped|geöffnet|ouvert|prochaine)'
+reminder = '(?i)(mahnung|zahlungserinnerung|reminder|overdue|überfällig|rappel)'
+invoice_number = '(?i)(rechnung|invoice|facture)\D{0,30}?(?P<number>\b[a-z]{0,4}-?\d[\d-]{4,}[a-z0-9-]*)'
+org_noise = '(?i)\b(ag|gmbh|sa|customer service|kundendienst|service|info|team|notifications?)\b'
+pay_task = "Pay {org} invoice {number}"
+description = "Mail from {sender}, {date}: {subject}"
+description_date = "%d.%m.%Y"
+private_domains = ["gmail.com", "googlemail.com", "gmx.ch", "gmx.net", "gmx.de", "bluewin.ch", "hotmail.com", "hotmail.ch", "outlook.com", "outlook.de", "live.com", "icloud.com", "me.com", "yahoo.com", "yahoo.de", "web.de", "sunrise.ch", "hispeed.ch", "protonmail.com", "proton.me", "yandex.ru", "yandex.com", "mail.ru"]
+invoice_days = 10
+sunday_margin = 3
+
+[triage.prompts]
+field = "[[ ## {name} ## ]]\n{value}"
+indent = "        "
+day = "%d/%m/%Y"
+received = "%a %d/%m/%Y"
+date_line = "- {day:%d/%m/%Y} ({day:%a}): {quote}"
+
+[triage.prompts.task]
+system = '''
+Your input fields are:
+1. `about_me` (str): 
+2. `action` (str): 
+3. `sender` (str): 
+4. `subject` (str): 
+5. `attachments` (str): 
+6. `body` (str):
+Your output fields are:
+1. `task` (str): English, imperative, at most 10 words
+All interactions will be structured in the following way, with the appropriate values filled in.
+
+Inputs will have the following structure:
+
+[[ ## about_me ## ]]
+{{about_me}}
+
+[[ ## action ## ]]
+{{action}}
+
+[[ ## sender ## ]]
+{{sender}}
+
+[[ ## subject ## ]]
+{{subject}}
+
+[[ ## attachments ## ]]
+{{attachments}}
+
+[[ ## body ## ]]
+{{body}}
+
+Outputs will be a JSON object with the following fields.
+
+{{
+  "task": "{{task}}"
+}}
+In adhering to this structure, your objective is: 
+{instructions}'''
+closing = '''Respond with a JSON object in the following order of fields: `task`.'''
+
+[triage.prompts.deadline]
+system = '''
+Your input fields are:
+1. `action` (str): 
+2. `received` (str): when the email arrived; this is today
+3. `sender` (str): 
+4. `subject` (str): 
+5. `body` (str): 
+6. `dates` (str): dates found in the email, with the words around each
+Your output fields are:
+1. `needs_deadline` (bool): does this task have a deadline I must meet?
+2. `deadline` (str): one of the listed dates copied as dd/mm/yyyy, or none
+3. `relation` (Literal['last_day', 'event']):
+All interactions will be structured in the following way, with the appropriate values filled in.
+
+Inputs will have the following structure:
+
+[[ ## action ## ]]
+{{action}}
+
+[[ ## received ## ]]
+{{received}}
+
+[[ ## sender ## ]]
+{{sender}}
+
+[[ ## subject ## ]]
+{{subject}}
+
+[[ ## body ## ]]
+{{body}}
+
+[[ ## dates ## ]]
+{{dates}}
+
+Outputs will be a JSON object with the following fields.
+
+{{
+  "needs_deadline": "{{needs_deadline}}        # note: the value you produce must be True or False",
+  "deadline": "{{deadline}}",
+  "relation": "{{relation}}        # note: the value you produce must exactly match (no extra characters) one of: last_day; event"
+}}
+In adhering to this structure, your objective is: 
+{instructions}'''
+closing = '''Respond with a JSON object in the following order of fields: `needs_deadline` (must be formatted as a valid Python bool), then `deadline`, then `relation` (must be formatted as a valid Python Literal['last_day', 'event']).'''

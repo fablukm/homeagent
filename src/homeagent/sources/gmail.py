@@ -1,6 +1,8 @@
+import re
 from base64 import urlsafe_b64decode
 from datetime import UTC, datetime
 from email.utils import parseaddr
+from html import unescape
 from http import HTTPStatus
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
@@ -13,8 +15,21 @@ from homeagent.sources.base import EmailSource, Upstream, register_source
 
 INBOX = "INBOX"
 PLAIN = "text/plain"
+HTML = "text/html"
+HIDDEN = re.compile(r"(?is)<(script|style|head).*?</\1>")
+BREAKS = re.compile(r"(?i)<br\s*/?>|</p>|</div>|</tr>|</li>")
+TAGS = re.compile(r"<[^>]+>")
+SPACES = re.compile(r"[ \t\xa0]+")
+BLANK_LINES = re.compile(r"\n\s*\n+")
+NEWLINE = "\n"
+PARAGRAPH = "\n\n"
 MS_PER_S = 1000
 CAMEL = ConfigDict(alias_generator=to_camel)
+
+
+def html_text(html: str) -> str:
+    text = unescape(TAGS.sub(" ", BREAKS.sub(NEWLINE, HIDDEN.sub(" ", html))))
+    return BLANK_LINES.sub(PARAGRAPH, SPACES.sub(" ", text)).strip()
 
 
 class _Token(BaseModel):
@@ -77,10 +92,14 @@ class _Part(BaseModel):
     def header(self, name: str) -> str:
         return next((h.value for h in self.headers if h.name.lower() == name.lower()), "")
 
-    def plain_text(self) -> str:
-        if self.mime_type == PLAIN and self.body.data:
-            return urlsafe_b64decode(self.body.data).decode()
-        return next((text for part in self.parts if (text := part.plain_text())), "")
+    def texts(self, mime_type: str) -> list[str]:
+        own = self.mime_type == mime_type and self.body.data and not self.filename
+        mine = [urlsafe_b64decode(self.body.data).decode(errors="replace")] if own else []
+        return mine + [text for part in self.parts for text in part.texts(mime_type)]
+
+    def text(self) -> str:
+        plain = NEWLINE.join(self.texts(PLAIN)).strip()
+        return plain or html_text(NEWLINE.join(self.texts(HTML)))
 
     def filenames(self) -> list[str]:
         own = [self.filename] if self.filename else []
@@ -131,7 +150,7 @@ class GmailSource(EmailSource):
             external_id=message.id,
             occurred_at=datetime.fromtimestamp(message.internal_date / MS_PER_S, UTC),
             title=message.payload.header("Subject"),
-            body=message.payload.plain_text() or message.snippet,
+            body=message.payload.text() or message.snippet,
             sender=parseaddr(message.payload.header("From"))[1].lower(),
             payload={
                 "from": message.payload.header("From"),

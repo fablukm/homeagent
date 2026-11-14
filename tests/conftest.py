@@ -7,7 +7,6 @@ import pytest
 from pydantic import BaseModel
 
 from homeagent.config.settings import CONFIG_FILES, LlmBackendCfg, Secrets, Settings, load_settings
-from homeagent.core.triage import MailSummary
 from homeagent.llm.base import Answer, Completion, Decision, DecisionBackend, Question, Usage
 from homeagent.llm.router import LlmRouter, NoBackendError
 
@@ -34,24 +33,27 @@ def settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
 
 
 class FakeRouter(LlmRouter):
-    def __init__(self, settings: Settings, answer: MailSummary | None) -> None:
+    def __init__(self, settings: Settings, answers: list[BaseModel] | None) -> None:
         super().__init__(settings.llm.model_copy(update={"backends": {}}), Secrets())
-        self.answer = answer
+        self.answers = answers
         self.prompts: list[str] = []
         self.systems: list[str] = []
+        self.schemas: list[str] = []
 
     async def complete[T: BaseModel](
         self, task_class: str, prompt: str, schema: type[T], *, system: str
     ) -> Completion[T]:
         self.prompts.append(prompt)
         self.systems.append(system)
-        if self.answer is None:
+        self.schemas.append(schema.__name__)
+        if self.answers is None:
             raise NoBackendError(task_class) from ConnectionError("down")
-        value = schema.model_validate(self.answer.model_dump())
+        answer = next(a for a in self.answers if isinstance(a, schema))
+        value = schema.model_validate(answer.model_dump())
         return Completion(value, Usage(prompt_tokens=7, latency_ms=3), "fake-model", "fake")
 
 
-type MakeRouter = Callable[[MailSummary | None], FakeRouter]
+type MakeRouter = Callable[[list[BaseModel] | None], FakeRouter]
 
 
 @pytest.fixture
@@ -65,6 +67,7 @@ class FakeDecider(DecisionBackend):
         self.model = cfg.model
         self.choice: str | None = "none"
         self.confidence = 1.0
+        self.probabilities: dict[str, float] = {}
         self.states: list[dict[str, str]] = []
         self.questions: list[Question] = []
 
@@ -73,9 +76,8 @@ class FakeDecider(DecisionBackend):
         self.questions.extend(questions)
         if self.choice is None:
             raise NoBackendError(self.name) from ConnectionError("laya down")
-        answer = Answer(
-            questions[0].id, self.choice, self.confidence, {self.choice: self.confidence}
-        )
+        probabilities = self.probabilities or {self.choice: self.confidence}
+        answer = Answer(questions[0].id, self.choice, self.confidence, probabilities)
         return Decision([answer], Usage(prompt_tokens=5, latency_ms=2), self.model, self.name)
 
     async def healthy(self) -> bool:

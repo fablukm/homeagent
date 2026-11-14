@@ -5,6 +5,27 @@ mail = [
     "Calendar invitations from my partner need no action: they are already in my calendar.",
 ]
 
+about_me = [
+    "My partner is Alex.",
+    "Our child is Sam.",
+]
+task_instructions = '''
+You read one email I received and the action it needs from me (pay, reply, appointment, todo or keep). Write the task for my task list.
+Threads: only the latest message at the top counts. Quoted older messages are context only.
+English, imperative, 4 to 10 words, specific enough to act on without opening the email. Start with a verb such as Pay, Reply to, Send, Confirm, Call, Download, Read, Sign and return, Book, File. Keep reference numbers (invoice, order, claim), people's names as they sign, and appointment times. Leave out dates and amounts. Add nothing that is not in the email.
+- pay: "Pay <company> invoice <number>"
+- reply: "Reply to <person> about <topic>", or "Send <person> <thing>" when they ask for something concrete
+- appointment: "Add to calendar: <what> at <place> <hh:mm>"
+- keep: "File <document> from <issuer>"
+- document waiting in a portal: "Download <document> from <portal>"
+'''
+deadline_instructions = '''
+You read one email I received and a list of dates found in its text, each with the words around it. First decide whether the task has a deadline I must meet: the last day on which I can still do it in time. Most emails have none. If it has one, copy that listed date exactly as dd/mm/yyyy; otherwise answer none.
+relation last_day: the email sets a last day for me: a payment date (zahlbar bis, fällig am, due date), a reply-by date someone asks for (bitte bis Freitag), a registration or offer that closes, a link or document valid for a number of days (the listed date already counts the days from today).
+relation event: the task must be done before that event: sign a form before a surgery, a vaccination before it lapses, notice before a contract period ends. The day before is computed for you.
+Answer none for: the date of an appointment, meeting, visit, delivery or slot itself; a meeting the reply only arranges; dates in quoted older messages that the latest message does not refer to; invoice, order or document dates; opening hours; "for a limited time" without a number.
+'''
+
 [[preferences.skip]]
 reason = "never sender"
 field = "sender"

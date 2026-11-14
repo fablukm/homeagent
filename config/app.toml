@@ -7,3 +7,5 @@ db_file = "homeagent.db"
 api_host = "0.0.0.0"
 api_port = 8000
 log_level = "INFO"
+quiet_loggers = ["httpx", "httpcore", "apscheduler", "telegram"]
+error_repeat_min = 60
