@@ -8,11 +8,22 @@ class NoBackendError(RuntimeError):
     pass
 
 
+class CloudBackendError(RuntimeError):
+    pass
+
+
 class LlmRouter:
     def __init__(self, cfg: Llm, secrets: Secrets) -> None:
         self.cfg = cfg
+        if cfg.local_only:
+            routed = {name for route in cfg.classes.values() for name in route.backends}
+            cloud = sorted(name for name, b in cfg.backends.items() if b.cloud and name in routed)
+            if cloud:
+                raise CloudBackendError(f"local_only, but tasks are routed to {cloud}")
         self.backends: dict[str, LlmBackend] = {}
         for name, backend_cfg in cfg.backends.items():
+            if backend_cfg.cloud and cfg.local_only:
+                continue
             if backend_cfg.type != "laya":
                 backend_cls = LLM_BACKENDS.get(backend_cfg.type)
                 api_key = secrets.llm_key(backend_cfg.secret)

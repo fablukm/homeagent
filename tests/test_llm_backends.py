@@ -1,4 +1,5 @@
 import json
+from functools import partial
 from typing import Literal
 
 import httpx
@@ -14,7 +15,7 @@ from homeagent.llm.base import Question
 from homeagent.llm.laya import LayaBackend
 from homeagent.llm.ollama import OllamaBackend
 from homeagent.llm.openai_compat import JSON_ONLY, OpenAICompatBackend
-from homeagent.llm.router import LlmRouter, NoBackendError
+from homeagent.llm.router import CloudBackendError, LlmRouter, NoBackendError
 
 BASE_URL = "http://llm.test/v1"
 OLLAMA_URL = "http://ollama.test:11434"
@@ -155,7 +156,8 @@ def test_secrets_map_each_provider_to_its_key() -> None:
 
 
 def test_router_builds_every_configured_backend(settings: Settings) -> None:
-    router = LlmRouter(settings.llm, Secrets.model_validate({}))
+    cloud_allowed = settings.llm.model_copy(update={"local_only": False})
+    router = LlmRouter(cloud_allowed, Secrets.model_validate({}))
 
     expected = {name for name, cfg in settings.llm.backends.items() if cfg.type != "laya"}
     assert set(router.backends) == expected
@@ -286,3 +288,35 @@ async def test_laya_health_follows_health_endpoint() -> None:
 
     assert await _laya(httpx.MockTransport(ok)).healthy()
     assert not await _laya(httpx.MockTransport(unreachable)).healthy()
+
+
+async def test_local_only_never_builds_or_pings_a_cloud_backend(settings: Settings) -> None:
+    keys = {f"{provider}_api_key": "k" for provider in ("anthropic", "openai", "deepseek")}
+    router = LlmRouter(settings.llm, Secrets.model_validate(keys))
+    pinged: list[str] = []
+
+    async def healthy(name: str) -> bool:
+        pinged.append(name)
+        return True
+
+    for name, backend in router.backends.items():
+        object.__setattr__(backend, "healthy", partial(healthy, name))
+    await router.refresh_health()
+
+    cloud = {name for name, cfg in settings.llm.backends.items() if cfg.cloud}
+    assert settings.llm.local_only
+    assert {"anthropic", "openai", "deepseek", "moonshot", "alibaba"} <= cloud
+    assert not cloud & set(router.backends)
+    assert not cloud & set(pinged)
+    assert not any(backend.cloud for backend in router.backends.values())
+    assert set(pinged) == set(router.backends)
+
+
+def test_local_only_refuses_a_task_routed_to_the_cloud(settings: Settings) -> None:
+    answer = settings.llm.classes["answer"]
+    routed = answer.model_copy(update={"backends": [*answer.backends, "anthropic"]})
+    classes = {**settings.llm.classes, "answer": routed}
+    cfg = settings.llm.model_copy(update={"classes": classes})
+
+    with pytest.raises(CloudBackendError, match="anthropic"):
+        LlmRouter(cfg, Secrets.model_validate({"anthropic_api_key": "k"}))

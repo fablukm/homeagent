@@ -204,6 +204,9 @@ class Agent:
     async def run(self) -> None:
         await asyncio.to_thread(upgrade_db)
         await self.load_paused()
+        self.log.info(
+            "llm", local_only=self.settings.llm.local_only, backends=sorted(self.router.backends)
+        )
         self.scheduler.every(
             self.settings.llm.health_interval_min, self.router.refresh_health, "llm_health"
         )

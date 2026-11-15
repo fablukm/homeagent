@@ -4,6 +4,9 @@ services:
     container_name: homeagent
     restart: unless-stopped
     env_file: .env
+    environment:
+      LANGSMITH_TRACING: "false"
+      LANGCHAIN_TRACING_V2: "false"
     volumes:
       - ./config:/app/config:ro
       - ./rules:/app/rules

@@ -77,6 +77,7 @@ class Llm(BaseModel):
     backends: dict[str, LlmBackendCfg]
     classes: dict[str, TaskClassRoute]
     health_interval_min: int
+    local_only: bool
 
 
 class EmailSourceCfg(BaseModel):

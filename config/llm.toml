@@ -1,5 +1,6 @@
 [llm]
 health_interval_min = 5
+local_only = true
 
 [llm.backends.pi]
 type = "ollama"
