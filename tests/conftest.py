@@ -1,12 +1,16 @@
+import json
 import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 
+import httpx
 import pytest
 from pydantic import BaseModel
 
+from homeagent.actions.google_tasks import GoogleTasks
 from homeagent.config.settings import CONFIG_FILES, LlmBackendCfg, Secrets, Settings, load_settings
+from homeagent.core.google_guard import google_client
 from homeagent.llm.base import Answer, Completion, Decision, DecisionBackend, Question, Usage
 from homeagent.llm.router import LlmRouter, NoBackendError
 
@@ -97,3 +101,34 @@ def make_decider(settings: Settings) -> MakeDecider:
         return decider
 
     return make
+
+
+class TasksApi:
+    def __init__(self, settings: Settings, titles: list[str] | None = None) -> None:
+        self.token_url = settings.sources.google.token_url
+        names = [settings.triage.tasks.list_title] if titles is None else titles
+        self.lists = [{"id": f"L{i}", "title": title} for i, title in enumerate(names)]
+        self.created: list[tuple[str, dict[str, str]]] = []
+        self.requests: list[httpx.Request] = []
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if str(request.url.copy_with(query=None)) == self.token_url:
+            return httpx.Response(200, json={"access_token": "access-1"})
+        if request.method == "GET":
+            return httpx.Response(200, json={"items": self.lists})
+        list_id = request.url.path.split("/")[-2]
+        self.created.append((list_id, json.loads(request.content)))
+        return httpx.Response(200, json={"id": f"T{len(self.created)}"})
+
+
+def tasks_for(settings: Settings, api: TasksApi) -> GoogleTasks:
+    google = settings.sources.google
+    secrets = Secrets.model_validate(
+        {"google_client_id": "c", "google_client_secret": "s", "google_refresh_token": "r"}
+    )
+    tasks = GoogleTasks(google, settings.triage.tasks.list_title, secrets)
+    tasks.client = google_client(
+        google.token_url, google.tasks_url, google.timeout_s, httpx.MockTransport(api.handle)
+    )
+    return tasks

@@ -3,7 +3,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from conftest import MakeDecider
+from conftest import MakeDecider, TasksApi, tasks_for
 from pydantic import BaseModel
 
 from homeagent.config.settings import Secrets, Settings
@@ -47,12 +47,16 @@ class OneEvent(Source):
         )
 
 
-def _agent(settings: Settings, tmp_path: Path, **secrets: str) -> Agent:
+def _agent(
+    settings: Settings, tmp_path: Path, api: TasksApi | None = None, **secrets: str
+) -> Agent:
     app = settings.app.model_copy(
         update={"data_dir": tmp_path, "rules_dir": ROOT / "rules.example"}
     )
     local = settings.model_copy(update={"app": app})
-    return Agent(local, Secrets.model_validate({"telegram_token": "123:test-token", **secrets}))
+    agent = Agent(local, Secrets.model_validate({"telegram_token": "123:test-token", **secrets}))
+    agent.triage.tasks.client = tasks_for(settings, api or TasksApi(settings)).client
+    return agent
 
 
 def test_gmail_is_polled_only_with_a_google_login(settings: Settings, tmp_path: Path) -> None:
@@ -113,7 +117,8 @@ class BrokenSource(OneMail):
 async def test_poll_triages_new_mail(
     settings: Settings, tmp_path: Path, make_router: MakeRouter, make_decider: MakeDecider
 ) -> None:
-    agent = _agent(settings, tmp_path)
+    api = TasksApi(settings)
+    agent = _agent(settings, tmp_path, api)
     async with agent.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sink = StdoutSink()
@@ -130,7 +135,11 @@ async def test_poll_triages_new_mail(
     assert (head, task) == ("pay by 15.11.2026, deadline 20.11.2026", "Pay the bill")
     decided = await agent.tap(card.key, "ok", "", 1)
     assert decided is not None
-    assert decided.text.splitlines()[-1] == "accepted"
+    assert decided.text.splitlines()[-1] == "accepted, task in Home Agent"
+    [(list_id, task)] = api.created
+    assert list_id == "L0"
+    assert (task["title"], task["due"]) == ("Pay the bill", "2026-11-15T00:00:00.000Z")
+    assert task["notes"].endswith("#all/mail-1")
     assert await agent.reply("unknown", "text", 1) is None
     await agent.engine.dispose()
 

@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from homeagent.actions.base import ACTIONS, ActionContext, ActionResult, ActionStatus
+from homeagent.actions.base import ACTIONS, Action, ActionContext, ActionResult, ActionStatus
 from homeagent.core.events import Event
 from homeagent.core.rules import Rule, RuleEngine
 from homeagent.db.models import ActionRow, RuleRun
@@ -30,11 +30,16 @@ class DispatchReport:
 
 class Dispatcher:
     def __init__(
-        self, sessions: async_sessionmaker[AsyncSession], rules: RuleEngine, sink: Sink
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        rules: RuleEngine,
+        sink: Sink,
+        actions: dict[str, Action],
     ) -> None:
         self.sessions = sessions
         self.rules = rules
         self.sink = sink
+        self.actions = actions
 
     async def run(self, event: Event, mode: str) -> DispatchReport:
         report = DispatchReport()
@@ -61,7 +66,8 @@ class Dispatcher:
                     report.already_fired += 1
                     continue
                 try:
-                    result = await ACTIONS.get(spec.type)().run(ctx)
+                    action = self.actions.get(spec.type) or ACTIONS.get(spec.type)()
+                    result = await action.run(ctx)
                 except Exception as exc:
                     result = ActionResult(ActionStatus.FAILED, detail=repr(exc))
                 await self._finish(ctx.idempotency_key, result)

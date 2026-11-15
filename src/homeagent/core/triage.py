@@ -6,12 +6,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from homeagent.actions.google_tasks import GoogleTasks
 from homeagent.config.settings import Need, Preferences
 from homeagent.config.settings import Triage as TriageCfg
 from homeagent.core.events import Event
 from homeagent.core.mailflow import NONE, MailFlow
 from homeagent.core.mailtext import following_sunday
-from homeagent.db.models import LlmCall, Proposal
+from homeagent.db.models import LlmCall, Proposal, RawEvent
 from homeagent.llm.base import DecisionBackend
 from homeagent.llm.router import LlmRouter
 from homeagent.sinks.base import Button, Card, Sink, Topic
@@ -65,9 +66,12 @@ class Triage:
         decider: DecisionBackend,
         sink: Sink,
         timezone: str,
+        tasks: GoogleTasks,
     ) -> None:
+        self.cfg = cfg
         self.sessions = sessions
         self.sink = sink
+        self.tasks = tasks
         self.flow = MailFlow(cfg, preferences, router, decider, timezone, self._record)
 
     async def run(self, event: Event) -> Proposal | None:
@@ -114,7 +118,10 @@ class Triage:
             head = UNSURE_MARK + head
         lines = [line for line in (head, proposal.final_summary, proposal.description) if line]
         if proposal.status != ProposalStatus.PENDING:
-            lines.append(STATUS_TEXT[ProposalStatus(proposal.status)])
+            status = STATUS_TEXT[ProposalStatus(proposal.status)]
+            if proposal.task_ref:
+                status = f"{status}, task in {self.cfg.tasks.list_title}"
+            lines.append(status)
             return Card(str(proposal.id), "\n".join(lines))
         actions = tuple(
             Button(n.value, Op.ACTION, n.value) for n in Need if n != proposal.final_need
@@ -154,7 +161,16 @@ class Triage:
                 return None
             if not self.apply(proposal, op, arg, user_id):
                 return None
+            if op == Op.ACCEPT and proposal.final_need != NONE:
+                raw = await session.get_one(RawEvent, proposal.raw_event_id)
+                proposal.task_ref = await self.add_task(proposal, raw.external_id)
             return self.card(proposal)
+
+    async def add_task(self, proposal: Proposal, mail_id: str) -> str:
+        link = self.cfg.tasks.mail_link.format(id=mail_id)
+        notes = "\n".join(line for line in (proposal.description, link) if line)
+        due = date.fromisoformat(proposal.final_due) if proposal.final_due else None
+        return await self.tasks.create(proposal.final_summary or proposal.description, notes, due)
 
     async def reply(self, ref: str, text: str, user_id: int) -> Card | None:
         summary = collapse(text)

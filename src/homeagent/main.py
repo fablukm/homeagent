@@ -17,6 +17,7 @@ import homeagent.llm.ollama
 import homeagent.llm.openai_compat
 import homeagent.sinks.stdout
 import homeagent.sinks.telegram
+from homeagent.actions.google_tasks import GoogleTasks
 from homeagent.api.app import build_app
 from homeagent.config.settings import App, Secrets, Settings, load_settings
 from homeagent.core.dispatch import Dispatcher
@@ -88,7 +89,8 @@ class Agent:
         sessions = make_sessions(self.engine)
         self.sessions = sessions
         self.ingestor = Ingestor(sessions)
-        self.dispatcher = Dispatcher(sessions, self.rules, self.sink)
+        tasks = GoogleTasks(settings.sources.google, settings.triage.tasks.list_title, secrets)
+        self.dispatcher = Dispatcher(sessions, self.rules, self.sink, {tasks.type: tasks})
         decider_name = settings.triage.laya.backend
         decider_cfg = settings.llm.backends[decider_name]
         decider = DECISION_BACKENDS.get(decider_cfg.type)(decider_name, decider_cfg)
@@ -100,6 +102,7 @@ class Agent:
             decider,
             self.sink,
             settings.app.timezone,
+            tasks,
         )
         self.sources: list[tuple[Source, int]] = [
             (GmailSource(cfg, settings.sources.google, secrets), cfg.interval_min)

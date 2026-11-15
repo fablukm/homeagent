@@ -1,10 +1,11 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+from conftest import TasksApi, tasks_for
 from sqlalchemy import select
 
 import homeagent.actions.telegram_log
-from homeagent.actions.base import ActionStatus
+from homeagent.actions.base import Action, ActionStatus
 from homeagent.config.settings import Settings
 from homeagent.core.dispatch import Dispatcher, rule_sha
 from homeagent.core.events import Event, SourceKind
@@ -44,14 +45,16 @@ class FakeCalendar(Source):
         )
 
 
-async def _setup(tmp_path: Path, settings: Settings) -> tuple[Ingestor, Dispatcher, StdoutSink]:
+async def _setup(
+    tmp_path: Path, settings: Settings, actions: dict[str, Action] | None = None
+) -> tuple[Ingestor, Dispatcher, StdoutSink]:
     engine = make_engine(tmp_path / "t.db")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sessions = make_sessions(engine)
     sink = StdoutSink()
     rules = RuleEngine(TomlRuleStore(ROOT / "rules.example", settings.schema_))
-    return Ingestor(sessions), Dispatcher(sessions, rules, sink), sink
+    return Ingestor(sessions), Dispatcher(sessions, rules, sink, actions or {}), sink
 
 
 async def test_matched_rule_writes_runs_and_actions_and_logs(
@@ -127,3 +130,27 @@ async def test_unmatched_event_writes_runs_only(tmp_path: Path, settings: Settin
         actions = (await session.execute(select(ActionRow))).scalars().all()
     assert runs and not any(r.matched for r in runs)
     assert actions == []
+
+
+async def test_task_create_puts_the_rule_task_into_the_home_agent_list(
+    tmp_path: Path, settings: Settings
+) -> None:
+    api = TasksApi(settings, ["Groceries", settings.triage.tasks.list_title])
+    tasks = tasks_for(settings, api)
+    partner = settings.sources.partner_emails[0]
+    source = FakeCalendar([{"id": "evt-1", "summary": "! Kinderarzt #kids", "creator": partner}])
+    ingestor, dispatcher, _ = await _setup(tmp_path, settings, {tasks.type: tasks})
+    [event] = (await ingestor.run(source)).events
+
+    await dispatcher.run(event, "work")
+
+    async with ingestor.sessions() as session:
+        row = await session.scalar(select(ActionRow).where(ActionRow.type == "task.create"))
+    assert row is not None
+    assert (row.status, row.external_ref) == (ActionStatus.TAKEN, "T1")
+    assert api.created == [
+        (
+            "L1",
+            {"title": "Book childcare for 20.11.", "notes": "", "due": "2026-11-10T00:00:00.000Z"},
+        )
+    ]

@@ -161,6 +161,7 @@ class Proposal(Base):
     final_need: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
     final_due: Mapped[str] = mapped_column(String(SHORT_LEN), default="")
     final_summary: Mapped[str] = mapped_column(Text, default="")
+    task_ref: Mapped[str] = mapped_column(String(ID_LEN), default="")
     message_ref: Mapped[str] = mapped_column(String(NAME_LEN), default="")
     status: Mapped[str] = mapped_column(String(SHORT_LEN))
     decided_at: Mapped[int | None] = mapped_column(Integer, nullable=True)

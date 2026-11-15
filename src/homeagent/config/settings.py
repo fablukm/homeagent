@@ -223,6 +223,11 @@ class TriagePrompts(BaseModel):
     deadline: NodePrompt
 
 
+class TaskListCfg(BaseModel):
+    list_title: str
+    mail_link: str
+
+
 class Triage(BaseModel):
     task_class: str
     body_chars: int
@@ -233,6 +238,7 @@ class Triage(BaseModel):
     text: MailTextCfg
     rules: TriageRules
     prompts: TriagePrompts
+    tasks: TaskListCfg
 
 
 class Preferences(BaseModel):

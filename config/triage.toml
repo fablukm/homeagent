@@ -10,6 +10,10 @@ todo = "Another concrete task only I can do, other than replying or paying: book
 appointment = "A dated event I attend or must be present for, so it belongs in my calendar: doctor, Kita or school event, meeting, official appointment, and time slots I booked myself where I must be home, such as a delivery window or a workman's visit. Not tickets, hotels or restaurants, and not events of family members that I do not attend. Example: parent evening on 27.11. at 19:30."
 keep = "The email itself carries a document worth filing, attached or in its text: invoice, receipt or ticket with a price, contract, policy, statement, certificate, payslip, tax or medical document. A document that only waits in a portal is todo. Not marketing, newsletters (even as PDF attachments), or plain notifications. Example: annual insurance statement as PDF."
 
+[triage.tasks]
+list_title = "Home Agent"
+mail_link = "https://mail.google.com/mail/u/0/#all/{id}"
+
 [triage.laya]
 backend = "laya"
 question = "action"

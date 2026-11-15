@@ -5,17 +5,18 @@ from uuid import uuid7
 from zoneinfo import ZoneInfo
 
 import pytest
-from conftest import FakeDecider, FakeRouter, MakeDecider
+from conftest import FakeDecider, FakeRouter, MakeDecider, TasksApi, tasks_for
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from homeagent.actions.google_tasks import TaskListMissingError
 from homeagent.config.settings import Need, Settings, SkipRule
 from homeagent.core.events import Event, SourceKind
 from homeagent.core.mailflow import PickDeadline, TaskText
 from homeagent.core.mailtext import following_sunday
 from homeagent.core.triage import Op, ProposalStatus, Triage
-from homeagent.db.models import Base, LlmCall, Proposal
+from homeagent.db.models import Base, LlmCall, Proposal, RawEvent
 from homeagent.db.session import make_engine, make_sessions
 from homeagent.llm.router import LlmRouter, NoBackendError
 from homeagent.sinks.base import Topic
@@ -45,6 +46,21 @@ def _mail(
     )
 
 
+async def _ingested(sessions: async_sessionmaker[AsyncSession], event: Event) -> Event:
+    async with sessions() as session, session.begin():
+        session.add(
+            RawEvent(
+                id=event.id,
+                source=event.source_name,
+                external_id=event.external_id,
+                occurred_at=0,
+                ingested_at=0,
+                payload_hash="",
+            )
+        )
+    return event
+
+
 @pytest.fixture
 async def engine(tmp_path: Path) -> AsyncEngine:
     engine = make_engine(tmp_path / "t.db")
@@ -70,6 +86,7 @@ def _triage(
         decider,
         sink,
         settings.app.timezone,
+        tasks_for(settings, TasksApi(settings)),
     )
     return triage, sink, sessions
 
@@ -139,6 +156,7 @@ async def test_the_instructions_go_to_the_model_as_system_message(
         make_decider("pay", SURE),
         StdoutSink(),
         settings.app.timezone,
+        tasks_for(settings, TasksApi(settings)),
     )
 
     await triage.run(_mail())
@@ -166,6 +184,7 @@ def test_prompt_version_follows_instructions_and_closing(
             decider,
             same.sink,
             settings.app.timezone,
+            tasks_for(settings, TasksApi(settings)),
         )
 
     def with_preferences(**update: object) -> Settings:
@@ -287,6 +306,8 @@ async def test_a_confirmed_none_is_stored_as_accepted_none(
     settings: Settings, engine: AsyncEngine, make_router: MakeRouter, make_decider: MakeDecider
 ) -> None:
     triage, _, sessions = _triage(settings, engine, None, make_router, make_decider("none", SURE))
+    api = TasksApi(settings)
+    triage.tasks = tasks_for(settings, api)
     proposal = await triage.run(_mail())
     assert proposal is not None
 
@@ -297,6 +318,7 @@ async def test_a_confirmed_none_is_stored_as_accepted_none(
     async with sessions() as session:
         stored = await session.get_one(Proposal, proposal.id)
     assert (stored.final_need, stored.status) == ("none", ProposalStatus.ACCEPTED)
+    assert api.requests == []
     await engine.dispose()
 
 
@@ -336,6 +358,7 @@ async def test_skip_rules_answer_before_laya(
         decider,
         StdoutSink(),
         settings.app.timezone,
+        tasks_for(settings, TasksApi(settings)),
     )
     invite = _mail(title="Updated invitation: Elternabend")
     ics = {"from": FROM, "attachments": ["Rechnung.pdf", "invite.ICS"]}
@@ -383,6 +406,7 @@ async def test_failed_laya_is_recorded_and_the_llm_is_not_asked(
         make_decider(None, SURE),
         StdoutSink(),
         settings.app.timezone,
+        tasks_for(settings, TasksApi(settings)),
     )
 
     with pytest.raises(NoBackendError):
@@ -431,7 +455,9 @@ async def test_corrections_change_the_final_values_and_keep_the_proposal(
     triage, _, sessions = _triage(
         settings, engine, [POWER_BILL], make_router, make_decider("pay", SURE)
     )
-    proposal = await triage.run(_mail())
+    api = TasksApi(settings)
+    triage.tasks = tasks_for(settings, api)
+    proposal = await triage.run(await _ingested(sessions, _mail()))
     assert proposal is not None
     key = str(proposal.id)
     today = datetime.now(ZoneInfo(settings.app.timezone)).date()
@@ -471,13 +497,24 @@ async def test_corrections_change_the_final_values_and_keep_the_proposal(
         "todo, deadline 11.12.2026",
         "Pay the power bill online",
         "Mail from Billing Team, 11.11.2026: Rechnung Oktober",
-        "accepted",
+        "accepted, task in Home Agent",
     ]
     assert len(accepted.text.splitlines()) <= settings.telegram.limits.other_lines
     async with sessions() as session:
         stored = await session.get_one(Proposal, proposal.id)
     assert stored.status == ProposalStatus.ACCEPTED
     assert stored.decided_by == USER
+    assert stored.task_ref == "T1"
+    assert api.created == [
+        (
+            "L0",
+            {
+                "title": "Pay the power bill online",
+                "notes": "Mail from Billing Team, 11.11.2026: Rechnung Oktober\n"
+                "https://mail.google.com/mail/u/0/#all/m1",
+            },
+        )
+    ]
     await engine.dispose()
 
 
@@ -494,3 +531,53 @@ def test_the_deadline_answer_decides_before_it_picks() -> None:
     assert list(PickDeadline.model_fields) == ["needs_deadline", "deadline", "relation"]
     assert schema["properties"]["relation"]["enum"] == ["last_day", "event"]
     assert list(TaskText.model_fields) == ["task"]
+
+
+async def test_a_corrected_none_becomes_a_task_named_after_the_mail_with_its_due_date(
+    settings: Settings, engine: AsyncEngine, make_router: MakeRouter, make_decider: MakeDecider
+) -> None:
+    triage, _, sessions = _triage(settings, engine, None, make_router, make_decider("none", SURE))
+    api = TasksApi(settings)
+    triage.tasks = tasks_for(settings, api)
+    proposal = await triage.run(await _ingested(sessions, _mail()))
+    assert proposal is not None
+    key = str(proposal.id)
+    sunday = following_sunday(datetime.now(ZoneInfo(settings.app.timezone)).date())
+
+    assert await triage.tap(key, Op.ACTION, "todo", USER) is not None
+    assert await triage.tap(key, Op.DUE, "sunday", USER) is not None
+    assert api.requests == []
+    accepted = await triage.tap(key, Op.ACCEPT, "", USER)
+
+    assert accepted is not None
+    assert accepted.text.splitlines()[-1] == "accepted, task in Home Agent"
+    [(list_id, task)] = api.created
+    assert list_id == "L0"
+    assert task["title"] == "Mail from Billing Team, 11.11.2026: Rechnung Oktober"
+    assert task["due"] == f"{sunday.isoformat()}T00:00:00.000Z"
+    await engine.dispose()
+
+
+async def test_a_failed_task_keeps_the_card_open_to_accept_again(
+    settings: Settings, engine: AsyncEngine, make_router: MakeRouter, make_decider: MakeDecider
+) -> None:
+    triage, _, sessions = _triage(
+        settings, engine, [POWER_BILL], make_router, make_decider("pay", SURE)
+    )
+    api = TasksApi(settings, ["Groceries"])
+    triage.tasks = tasks_for(settings, api)
+    proposal = await triage.run(await _ingested(sessions, _mail()))
+    assert proposal is not None
+
+    with pytest.raises(TaskListMissingError, match="Home Agent"):
+        await triage.tap(str(proposal.id), Op.ACCEPT, "", USER)
+    async with sessions() as session:
+        stored = await session.get_one(Proposal, proposal.id)
+    assert (stored.status, stored.task_ref) == (ProposalStatus.PENDING, "")
+    assert api.created == []
+
+    api.lists.append({"id": "L7", "title": settings.triage.tasks.list_title})
+    accepted = await triage.tap(str(proposal.id), Op.ACCEPT, "", USER)
+    assert accepted is not None
+    assert [list_id for list_id, _ in api.created] == ["L7"]
+    await engine.dispose()
