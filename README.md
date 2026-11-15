@@ -4,8 +4,8 @@ Personal home-automation agent: mail triage, calendar rules, tasks, Telegram.
 
 ## Run on the Pi
 
-1. `git clone` this repo to the source folder named in `homeagent.docker-compose.yml`.
-2. In the stack folder, next to the compose file, create:
+1. `git clone` this repo to the stack folder `/mnt/nvme/docker/homeagent`.
+2. In that folder create:
    - `.env` from `.env.example`
    - `config/` with every `config/*.toml`; `sources.toml` and `telegram.toml` come from their `.example.toml`
    - `rules/` from `rules.example/`

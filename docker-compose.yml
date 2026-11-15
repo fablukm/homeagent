@@ -1,6 +1,6 @@
 services:
   homeagent:
-    build: /mnt/nvme/src/homeagent
+    build: .
     container_name: homeagent
     restart: unless-stopped
     env_file: .env
@@ -17,7 +17,7 @@ services:
 
   laya-serve:
     build:
-      context: /mnt/nvme/src/homeagent/deploy
+      context: ./deploy
       dockerfile: laya-serve.Dockerfile
     image: laya-serve:0.4.31
     container_name: laya-serve
