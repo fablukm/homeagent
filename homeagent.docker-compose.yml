@@ -10,7 +10,25 @@ services:
       - ./data:/app/data
     ports:
       - "8020:8000"
-    networks: [ai-stack_ai-net, paperless_paperless-net, monitoring_monitoring]
+    depends_on:
+      laya-serve: { condition: service_healthy }
+    networks: [default, ai-stack_ai-net, paperless_paperless-net, monitoring_monitoring]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  laya-serve:
+    build:
+      context: /mnt/nvme/src/homeagent/deploy
+      dockerfile: laya-serve.Dockerfile
+    image: laya-serve:0.4.31
+    container_name: laya-serve
+    restart: unless-stopped
+    environment:
+      LAYA_EXTRA_MODELS: '{"triage": "/models/ft4"}'
+      LAYA_DEFAULT_MODEL: triage
+      LAYA_MODELS: triage
+      LAYA_THREADS: "4"
+    volumes:
+      - ./models/laya:/models:ro
     logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
 networks:

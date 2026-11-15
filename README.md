@@ -9,7 +9,8 @@ Personal home-automation agent: mail triage, calendar rules, tasks, Telegram.
    - `.env` from `.env.example`
    - `config/` with every `config/*.toml`; `sources.toml` and `telegram.toml` come from their `.example.toml`
    - `rules/` from `rules.example/`
-3. `docker compose up -d --build homeagent`
+   - `models/laya/<name>/` with a fine-tuned Laya model; the compose file names the one laya-serve loads
+3. `docker compose up -d --build`
 
 Update: `scripts/deploy.sh`.
 
