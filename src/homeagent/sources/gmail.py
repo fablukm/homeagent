@@ -139,7 +139,9 @@ class GmailSource(EmailSource):
             if response.status_code == HTTPStatus.NOT_FOUND:
                 continue
             response.raise_for_status()
-            raws.append(response.json())
+            message = response.json()
+            if INBOX in message.get("labelIds", []):
+                raws.append(message)
         return raws, next_cursor
 
     def normalise(self, raw: Upstream) -> Event | None:

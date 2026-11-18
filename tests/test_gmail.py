@@ -164,6 +164,20 @@ async def test_history_poll_dedupes_and_skips_deleted_messages(settings: Setting
     assert history[0].url.params["labelId"] == "INBOX"
 
 
+async def test_history_poll_drops_drafts_and_sent_replies(settings: Settings) -> None:
+    mails = _mails()
+    fake = FakeGmail(settings, mails)
+    for message_id, label in (("draft-1", "DRAFT"), ("draft-2", "DRAFT"), ("sent", "SENT")):
+        fake.messages[message_id] = {**fake.messages["m01"], "id": message_id, "labelIds": [label]}
+    fake.history = [["m01", "draft-1"], ["draft-2"], ["sent", "m02"]]
+    source = _source(settings, httpx.MockTransport(fake.handle))
+
+    raws, cursor = await source.poll("100")
+
+    assert [r["id"] for r in raws] == ["m01", "m02"]
+    assert cursor == "103"
+
+
 async def test_ingest_stores_backfill_once_then_follows_history(
     tmp_path: Path, settings: Settings
 ) -> None:
