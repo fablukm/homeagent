@@ -343,6 +343,11 @@ async def test_an_unsure_none_proposes_lay_s_second_choice(
         "maybe pay by 15.11.2026, deadline 11.12.2026",
         "Pay the power bill",
     ]
+    [verdicts, *_] = card.buttons
+    assert [(b.label, b.op) for b in verdicts] == [
+        ("Accept", Op.ACCEPT),
+        ("Nothing to do", Op.NOTHING),
+    ]
     await engine.dispose()
 
 
@@ -554,6 +559,31 @@ def test_the_deadline_answer_decides_before_it_picks() -> None:
     assert list(PickDeadline.model_fields) == ["needs_deadline", "deadline", "relation"]
     assert schema["properties"]["relation"]["enum"] == ["last_day", "event"]
     assert list(TaskText.model_fields) == ["task"]
+
+
+async def test_an_accepted_keep_only_creates_an_undated_archive_task(
+    settings: Settings, engine: AsyncEngine, make_router: MakeRouter, make_decider: MakeDecider
+) -> None:
+    archive = TaskText(task="Archive insurance statement from Helsana in Paperless")
+    decider = make_decider("keep", SURE)
+    triage, _, sessions = _triage(settings, engine, [archive], make_router, decider)
+    api = TasksApi(settings)
+    triage.tasks = tasks_for(settings, api)
+    mail = _mail(body="Ihre Jahresabrechnung finden Sie im Anhang.", title="Jahresabrechnung")
+    proposal = await triage.run(await _ingested(sessions, mail))
+    assert proposal is not None
+    assert proposal.need == Need.KEEP
+    assert proposal.due == ""
+
+    accepted = await triage.tap(str(proposal.id), Op.ACCEPT, "", USER)
+
+    assert accepted is not None
+    [(list_id, task)] = api.created
+    assert list_id == "L0"
+    assert task["title"] == archive.task
+    assert "due" not in task
+    assert {r.method for r in api.requests} == {"GET", "POST"}
+    await engine.dispose()
 
 
 async def test_a_corrected_none_becomes_a_task_named_after_the_mail_with_its_due_date(
