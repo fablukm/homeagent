@@ -1,4 +1,5 @@
 import logging
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +14,7 @@ from homeagent.core.syntax import parse_title
 from homeagent.db.models import Base
 from homeagent.llm.laya import LayaBackend
 from homeagent.llm.router import LlmRouter
-from homeagent.main import Agent, configure_logging
+from homeagent.main import SECONDS_PER_MINUTE, Agent, configure_logging
 from homeagent.sinks.base import Topic
 from homeagent.sinks.stdout import StdoutSink
 from homeagent.sources.base import Source, Upstream
@@ -219,7 +220,9 @@ async def test_errors_are_reported_once_per_place_without_secrets(
         "error in poll gmail\nRuntimeError: timeout",
         "error in gmail m1\nRuntimeError: timeout",
     ]
-    agent.reported["gmail m1"] = ("error in gmail m1\nRuntimeError: timeout", 0.0)
+    window = settings.app.error_repeat_min * SECONDS_PER_MINUTE
+    expired = time.monotonic() - window - 1
+    agent.reported["gmail m1"] = ("error in gmail m1\nRuntimeError: timeout", expired)
     await agent.report("gmail m1", RuntimeError("timeout"))
     assert len(sink.lines) == 4
     await agent.engine.dispose()
