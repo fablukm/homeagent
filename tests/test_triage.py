@@ -46,7 +46,9 @@ def _mail(
     )
 
 
-async def _ingested(sessions: async_sessionmaker[AsyncSession], event: Event) -> Event:
+async def _ingested(
+    sessions: async_sessionmaker[AsyncSession], event: Event, payload_hash: str = ""
+) -> Event:
     async with sessions() as session, session.begin():
         session.add(
             RawEvent(
@@ -55,7 +57,7 @@ async def _ingested(sessions: async_sessionmaker[AsyncSession], event: Event) ->
                 external_id=event.external_id,
                 occurred_at=0,
                 ingested_at=0,
-                payload_hash="",
+                payload_hash=payload_hash,
             )
         )
     return event
@@ -446,6 +448,27 @@ async def test_a_decision_is_recorded_once(
     assert stored.status == ProposalStatus.DECLINED
     assert stored.decided_by == USER
     assert stored.decided_at is not None
+    await engine.dispose()
+
+
+async def test_a_mail_read_after_its_card_gets_no_second_card(
+    settings: Settings, engine: AsyncEngine, make_router: MakeRouter, make_decider: MakeDecider
+) -> None:
+    decider = make_decider("pay", SURE)
+    triage, sink, sessions = _triage(settings, engine, [POWER_BILL], make_router, decider)
+    unread = await _ingested(sessions, _mail())
+    first = await triage.run(unread)
+    assert first is not None
+    await triage.tap(str(first.id), Op.NOTHING, "", USER)
+    read = await _ingested(sessions, unread.model_copy(update={"id": uuid7()}), "labels-changed")
+
+    second = await triage.run(read)
+
+    assert second is None
+    assert len(sink.asked) == 1
+    assert len(decider.states) == 1
+    async with sessions() as session:
+        assert len((await session.scalars(select(Proposal))).all()) == 1
     await engine.dispose()
 
 

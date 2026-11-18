@@ -75,6 +75,8 @@ class Triage:
         self.flow = MailFlow(cfg, preferences, router, decider, timezone, self._record)
 
     async def run(self, event: Event) -> Proposal | None:
+        if await self.has_card(event):
+            return None
         outcome = await self.flow.run(event)
         if outcome.decision is None:
             return None
@@ -102,6 +104,19 @@ class Triage:
             stored.message_ref = ref
         proposal.message_ref = ref
         return proposal
+
+    async def has_card(self, event: Event) -> bool:
+        async with self.sessions() as session:
+            found = await session.scalar(
+                select(Proposal.id)
+                .join(RawEvent, RawEvent.id == Proposal.raw_event_id)
+                .where(
+                    RawEvent.source == event.source_name,
+                    RawEvent.external_id == event.external_id,
+                )
+                .limit(1)
+            )
+        return found is not None
 
     async def _record(self, call: LlmCall) -> None:
         async with self.sessions() as session, session.begin():
