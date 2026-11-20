@@ -19,6 +19,7 @@ from homeagent.sinks.base import Topic
 from homeagent.sinks.stdout import StdoutSink
 from homeagent.sources.base import Source, Upstream
 from homeagent.sources.gmail import GmailSource
+from homeagent.sources.yandex import YandexSource
 
 type MakeRouter = Callable[[list[BaseModel] | None], LlmRouter]
 
@@ -68,6 +69,14 @@ def test_gmail_is_polled_only_with_a_google_login(settings: Settings, tmp_path: 
     [(source, interval)] = with_login.sources
     assert isinstance(source, GmailSource)
     assert interval == next(c.interval_min for c in settings.sources.email if c.name == "gmail")
+
+
+def test_yandex_is_polled_only_with_an_app_password(settings: Settings, tmp_path: Path) -> None:
+    agent = _agent(settings, tmp_path, yandex_app_password="pw")
+
+    [(source, interval)] = agent.sources
+    assert isinstance(source, YandexSource)
+    assert interval == next(c.interval_min for c in settings.sources.email if c.name == "yandex")
 
 
 async def test_poll_stores_events_then_runs_rules_once(settings: Settings, tmp_path: Path) -> None:

@@ -586,6 +586,28 @@ async def test_an_accepted_keep_only_creates_an_undated_archive_task(
     await engine.dispose()
 
 
+async def test_a_task_from_a_mail_without_a_web_link_has_only_the_description(
+    settings: Settings, engine: AsyncEngine, make_router: MakeRouter, make_decider: MakeDecider
+) -> None:
+    archive = TaskText(task="Archive invoice from Ozon in Paperless")
+    triage, _, sessions = _triage(
+        settings, engine, [archive], make_router, make_decider("keep", SURE)
+    )
+    api = TasksApi(settings)
+    triage.tasks = tasks_for(settings, api)
+    mail = _mail(title="Rechnung").model_copy(
+        update={"source_name": "yandex", "external_id": "7:42"}
+    )
+    proposal = await triage.run(await _ingested(sessions, mail))
+    assert proposal is not None
+
+    await triage.tap(str(proposal.id), Op.ACCEPT, "", USER)
+
+    [(_, task)] = api.created
+    assert task["notes"] == proposal.description
+    await engine.dispose()
+
+
 async def test_a_corrected_none_becomes_a_task_named_after_the_mail_with_its_due_date(
     settings: Settings, engine: AsyncEngine, make_router: MakeRouter, make_decider: MakeDecider
 ) -> None:

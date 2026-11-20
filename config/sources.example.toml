@@ -12,6 +12,7 @@ labels = ["Work", "Dog", "Insurance", "Kita", "Quittungen und Rechnungen", "Rese
 
 [[sources.email]]
 name = "yandex"
+url = "imaps://imap.yandex.ru:993"
 account = "you@yandex.ru"
 interval_min = 5
 backfill_days = 2

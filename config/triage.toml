@@ -12,7 +12,7 @@ keep = "The email itself carries a document worth filing, attached or in its tex
 
 [triage.tasks]
 list_title = "Home Agent"
-mail_link = "https://mail.google.com/mail/u/0/#all/{id}"
+mail_links = { gmail = "https://mail.google.com/mail/u/0/#all/{id}" }
 
 [triage.laya]
 backend = "laya"

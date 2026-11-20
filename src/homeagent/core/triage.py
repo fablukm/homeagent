@@ -178,11 +178,11 @@ class Triage:
                 return None
             if op == Op.ACCEPT and proposal.final_need != NONE:
                 raw = await session.get_one(RawEvent, proposal.raw_event_id)
-                proposal.task_ref = await self.add_task(proposal, raw.external_id)
+                proposal.task_ref = await self.add_task(proposal, raw)
             return self.card(proposal)
 
-    async def add_task(self, proposal: Proposal, mail_id: str) -> str:
-        link = self.cfg.tasks.mail_link.format(id=mail_id)
+    async def add_task(self, proposal: Proposal, mail: RawEvent) -> str:
+        link = self.cfg.tasks.mail_links.get(mail.source, "").format(id=mail.external_id)
         notes = "\n".join(line for line in (proposal.description, link) if line)
         due = date.fromisoformat(proposal.final_due) if proposal.final_due else None
         return await self.tasks.create(proposal.final_summary or proposal.description, notes, due)

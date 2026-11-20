@@ -35,8 +35,10 @@ from homeagent.sinks.base import Card, Sink, Topic
 from homeagent.sinks.telegram import TelegramSink
 from homeagent.sources.base import Source
 from homeagent.sources.gmail import GmailSource
+from homeagent.sources.yandex import YandexSource
 
 GMAIL = "gmail"
+YANDEX = "yandex"
 SECONDS_PER_MINUTE = 60
 MINUTES_PER_HOUR = 60
 AGENT_STATE = ("agent", "paused")
@@ -108,6 +110,11 @@ class Agent:
             (GmailSource(cfg, settings.sources.google, secrets), cfg.interval_min)
             for cfg in settings.sources.email
             if cfg.name == GMAIL and secrets.google_refresh_token
+        ]
+        self.sources += [
+            (YandexSource(cfg, secrets), cfg.interval_min)
+            for cfg in settings.sources.email
+            if cfg.name == YANDEX and secrets.yandex_app_password
         ]
 
     async def status(self) -> str:

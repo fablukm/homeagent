@@ -226,7 +226,7 @@ class TriagePrompts(BaseModel):
 
 class TaskListCfg(BaseModel):
     list_title: str
-    mail_link: str
+    mail_links: dict[str, str]
 
 
 class Triage(BaseModel):
@@ -262,6 +262,7 @@ class Secrets(BaseSettings):
     google_client_id: SecretStr | None = None
     google_client_secret: SecretStr | None = None
     google_refresh_token: SecretStr | None = None
+    yandex_app_password: SecretStr | None = None
     paperless_token: SecretStr | None = None
     firefly_token: SecretStr | None = None
 
