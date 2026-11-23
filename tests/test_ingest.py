@@ -1,13 +1,13 @@
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from homeagent.core.events import Event, SourceKind
 from homeagent.core.ingest import STATUS_QUARANTINED, Ingestor
-from homeagent.db.models import Base, Cursor, RawEvent
-from homeagent.db.session import make_engine, make_sessions
+from homeagent.db.models import Cursor, RawEvent
+from homeagent.db.session import make_sessions
 from homeagent.sources.base import Source, Upstream
 
 
@@ -37,20 +37,13 @@ class FakeMail(Source):
         )
 
 
-async def _ingestor(tmp_path: Path) -> Ingestor:
-    engine = make_engine(tmp_path / "t.db")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    return Ingestor(make_sessions(engine))
-
-
-async def test_dedupe_quarantine_and_cursor(tmp_path: Path) -> None:
+async def test_dedupe_quarantine_and_cursor(engine: AsyncEngine) -> None:
     good = {"id": 1, "folder": "inbox", "text": "Rechnung Nr. 42"}
     bad = {"id": 2, "folder": "inbox"}
     source = FakeMail(
         [[good, bad], [good, {"id": 3, "folder": "inbox", "text": "Kita Elternabend"}]]
     )
-    ingestor = await _ingestor(tmp_path)
+    ingestor = Ingestor(make_sessions(engine))
 
     first = await ingestor.run(source)
     assert [e.body for e in first.events] == ["Rechnung Nr. 42"]
@@ -83,13 +76,13 @@ async def _rows(ingestor: Ingestor) -> list[RawEvent]:
         return list((await session.execute(select(RawEvent))).scalars().all())
 
 
-async def test_replay_from_lost_cursor_stores_nothing_twice(tmp_path: Path) -> None:
+async def test_replay_from_lost_cursor_stores_nothing_twice(engine: AsyncEngine) -> None:
     batch = [
         {"id": 1, "folder": "inbox", "text": "Rechnung Nr. 42"},
         {"id": 2, "folder": "inbox"},
     ]
     source = FakeMail([batch])
-    ingestor = await _ingestor(tmp_path)
+    ingestor = Ingestor(make_sessions(engine))
     await ingestor.run(source)
     before = await _rows(ingestor)
     async with ingestor.sessions() as session, session.begin():
@@ -105,9 +98,9 @@ async def test_replay_from_lost_cursor_stores_nothing_twice(tmp_path: Path) -> N
     assert {r.id for r in after} == {r.id for r in before}
 
 
-async def test_failed_poll_keeps_cursor_and_rows(tmp_path: Path) -> None:
+async def test_failed_poll_keeps_cursor_and_rows(engine: AsyncEngine) -> None:
     source = BrokenPoll([[{"id": 1, "folder": "inbox", "text": "Kita Elternabend"}]])
-    ingestor = await _ingestor(tmp_path)
+    ingestor = Ingestor(make_sessions(engine))
     await ingestor.run(source)
 
     with pytest.raises(ConnectionError):

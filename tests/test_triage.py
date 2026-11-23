@@ -1,6 +1,5 @@
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid7
 from zoneinfo import ZoneInfo
 
@@ -16,8 +15,8 @@ from homeagent.core.events import Event, SourceKind
 from homeagent.core.mailflow import PickDeadline, TaskText
 from homeagent.core.mailtext import following_sunday
 from homeagent.core.triage import Op, ProposalStatus, Triage
-from homeagent.db.models import Base, LlmCall, Proposal, RawEvent
-from homeagent.db.session import make_engine, make_sessions
+from homeagent.db.models import LlmCall, Proposal, RawEvent
+from homeagent.db.session import make_sessions
 from homeagent.llm.router import LlmRouter, NoBackendError
 from homeagent.sinks.base import Topic
 from homeagent.sinks.stdout import StdoutSink
@@ -61,14 +60,6 @@ async def _ingested(
             )
         )
     return event
-
-
-@pytest.fixture
-async def engine(tmp_path: Path) -> AsyncEngine:
-    engine = make_engine(tmp_path / "t.db")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    return engine
 
 
 def _triage(

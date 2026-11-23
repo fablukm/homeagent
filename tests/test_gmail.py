@@ -7,13 +7,13 @@ from urllib.parse import parse_qs
 
 import httpx
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from homeagent.config.settings import Secrets, Settings
 from homeagent.core.events import SourceKind
 from homeagent.core.google_guard import google_client
 from homeagent.core.ingest import Ingestor
-from homeagent.db.models import Base
-from homeagent.db.session import make_engine, make_sessions
+from homeagent.db.session import make_sessions
 from homeagent.sources.base import Upstream
 from homeagent.sources.gmail import GmailSource
 
@@ -179,11 +179,8 @@ async def test_history_poll_drops_drafts_and_sent_replies(settings: Settings) ->
 
 
 async def test_ingest_stores_backfill_once_then_follows_history(
-    tmp_path: Path, settings: Settings
+    engine: AsyncEngine, settings: Settings
 ) -> None:
-    engine = make_engine(tmp_path / "t.db")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     ingestor = Ingestor(make_sessions(engine))
     fake = FakeGmail(settings, _mails())
     source = _source(settings, httpx.MockTransport(fake.handle))

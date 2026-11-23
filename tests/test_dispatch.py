@@ -3,6 +3,7 @@ from pathlib import Path
 
 from conftest import TasksApi, tasks_for
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 import homeagent.actions.telegram_log
 from homeagent.actions.base import Action, ActionStatus
@@ -12,8 +13,8 @@ from homeagent.core.events import Event, SourceKind
 from homeagent.core.ingest import Ingestor
 from homeagent.core.rules import RuleEngine, TomlRuleStore
 from homeagent.core.syntax import parse_title
-from homeagent.db.models import ActionRow, Base, RawEvent, RuleRun
-from homeagent.db.session import make_engine, make_sessions
+from homeagent.db.models import ActionRow, RawEvent, RuleRun
+from homeagent.db.session import make_sessions
 from homeagent.sinks.base import Topic
 from homeagent.sinks.stdout import StdoutSink
 from homeagent.sources.base import Source, Upstream
@@ -46,11 +47,8 @@ class FakeCalendar(Source):
 
 
 async def _setup(
-    tmp_path: Path, settings: Settings, actions: dict[str, Action] | None = None
+    engine: AsyncEngine, settings: Settings, actions: dict[str, Action] | None = None
 ) -> tuple[Ingestor, Dispatcher, StdoutSink]:
-    engine = make_engine(tmp_path / "t.db")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     sessions = make_sessions(engine)
     sink = StdoutSink()
     rules = RuleEngine(TomlRuleStore(ROOT / "rules.example", settings.schema_))
@@ -58,11 +56,11 @@ async def _setup(
 
 
 async def test_matched_rule_writes_runs_and_actions_and_logs(
-    tmp_path: Path, settings: Settings
+    engine: AsyncEngine, settings: Settings
 ) -> None:
     partner = settings.sources.partner_emails[0]
     source = FakeCalendar([{"id": "evt-1", "summary": "! Kinderarzt #kids", "creator": partner}])
-    ingestor, dispatcher, sink = await _setup(tmp_path, settings)
+    ingestor, dispatcher, sink = await _setup(engine, settings)
     [event] = (await ingestor.run(source)).events
 
     report = await dispatcher.run(event, "work")
@@ -96,11 +94,11 @@ async def test_matched_rule_writes_runs_and_actions_and_logs(
 
 
 async def test_replayed_event_reruns_rules_but_fires_no_action_twice(
-    tmp_path: Path, settings: Settings
+    engine: AsyncEngine, settings: Settings
 ) -> None:
     partner = settings.sources.partner_emails[0]
     source = FakeCalendar([{"id": "evt-1", "summary": "! Kinderarzt #kids", "creator": partner}])
-    ingestor, dispatcher, sink = await _setup(tmp_path, settings)
+    ingestor, dispatcher, sink = await _setup(engine, settings)
     [event] = (await ingestor.run(source)).events
     await dispatcher.run(event, "work")
 
@@ -116,9 +114,9 @@ async def test_replayed_event_reruns_rules_but_fires_no_action_twice(
     assert len(actions) == len(["calendar.block", "task.create", "telegram.log"])
 
 
-async def test_unmatched_event_writes_runs_only(tmp_path: Path, settings: Settings) -> None:
+async def test_unmatched_event_writes_runs_only(engine: AsyncEngine, settings: Settings) -> None:
     source = FakeCalendar([{"id": "evt-2", "summary": "Lunch", "creator": "me"}])
-    ingestor, dispatcher, sink = await _setup(tmp_path, settings)
+    ingestor, dispatcher, sink = await _setup(engine, settings)
     [event] = (await ingestor.run(source)).events
 
     report = await dispatcher.run(event, "work")
@@ -133,13 +131,13 @@ async def test_unmatched_event_writes_runs_only(tmp_path: Path, settings: Settin
 
 
 async def test_task_create_puts_the_rule_task_into_the_home_agent_list(
-    tmp_path: Path, settings: Settings
+    engine: AsyncEngine, settings: Settings
 ) -> None:
     api = TasksApi(settings, ["Groceries", settings.triage.tasks.list_title])
     tasks = tasks_for(settings, api)
     partner = settings.sources.partner_emails[0]
     source = FakeCalendar([{"id": "evt-1", "summary": "! Kinderarzt #kids", "creator": partner}])
-    ingestor, dispatcher, _ = await _setup(tmp_path, settings, {tasks.type: tasks})
+    ingestor, dispatcher, _ = await _setup(engine, settings, {tasks.type: tasks})
     [event] = (await ingestor.run(source)).events
 
     await dispatcher.run(event, "work")

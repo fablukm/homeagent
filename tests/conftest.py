@@ -1,16 +1,19 @@
 import json
 import os
 import shutil
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import httpx
 import pytest
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from homeagent.actions.google_tasks import GoogleTasks
 from homeagent.config.settings import CONFIG_FILES, LlmBackendCfg, Secrets, Settings, load_settings
 from homeagent.core.google_guard import google_client
+from homeagent.db.models import Base
+from homeagent.db.session import make_engine
 from homeagent.llm.base import Answer, Completion, Decision, DecisionBackend, Question, Usage
 from homeagent.llm.router import LlmRouter, NoBackendError
 
@@ -24,6 +27,15 @@ def no_real_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(Secrets.model_config, "env_file", None)
     for name in [n for n in os.environ if n.startswith(ENV_PREFIX)]:
         monkeypatch.delenv(name)
+
+
+@pytest.fixture
+async def engine(tmp_path: Path) -> AsyncIterator[AsyncEngine]:
+    engine = make_engine(tmp_path / "t.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    await engine.dispose()
 
 
 @pytest.fixture(scope="session")
